@@ -65,12 +65,12 @@ export function Header() {
             <span className="text-xl font-bold font-[Montserrat] uppercase">STUDIO LEFLOW</span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-1">
+          <nav className="hidden xl:flex items-center gap-0.5">
             {navigation.map((item) => (
               <motion.div key={item.name} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
                 <Link 
                   href={item.href}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
                     isActive(item.href)
                       ? "text-primary"
                       : "text-foreground"
@@ -85,7 +85,7 @@ export function Header() {
               <>
                 <Link 
                   href="/admin"
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
                     isActive("/admin")
                       ? "text-primary"
                       : "text-foreground"
@@ -119,14 +119,14 @@ export function Header() {
             )}
             <button
               onClick={scrollToServices}
-              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate text-foreground"
+              className="px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate text-foreground"
               data-testid="link-nav-usluge"
             >
               Usluge
             </button>
           </nav>
 
-          <div className="hidden lg:flex items-center gap-2">
+          <div className="hidden xl:flex items-center gap-2">
             <ThemeToggle />
             {user ? (
               <>
@@ -161,7 +161,7 @@ export function Header() {
           </div>
 
           <button
-            className="lg:hidden p-2 hover-elevate rounded-lg"
+            className="xl:hidden p-2 hover-elevate rounded-lg"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             data-testid="button-mobile-menu"
           >
@@ -174,7 +174,7 @@ export function Header() {
         </div>
 
         {mobileMenuOpen && (
-          <div className="lg:hidden py-4 border-t" data-testid="mobile-menu">
+          <div className="xl:hidden py-4 border-t" data-testid="mobile-menu">
             <nav className="flex flex-col gap-2">
               {navigation.map((item) => (
                 <Link 
