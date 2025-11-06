@@ -266,16 +266,16 @@ export default function AuthPage() {
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary/90 to-primary/70" />
         
-        <div className="relative z-10 flex flex-col items-center justify-center text-center p-12 text-white">
+        <div className="relative z-10 flex flex-col items-center justify-center text-center p-12 text-white w-full">
           <div className="mb-8">
             <Music className="w-24 h-24 mx-auto mb-6" />
           </div>
           
-          <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight font-[Montserrat]">
+          <h2 className="text-4xl lg:text-5xl font-bold mb-6 tracking-tight font-[Montserrat] max-w-2xl mx-auto">
             Studio LeFlow Community
           </h2>
           
-          <p className="text-xl lg:text-2xl max-w-lg leading-relaxed text-white/90">
+          <p className="text-xl lg:text-2xl max-w-lg mx-auto leading-relaxed text-white/90">
             Pridružite se zajednici muzičkih producenata. Učestvujte u mesečnim giveaway konkursima i osvajajte besplatne studio termine.
           </p>
         </div>
