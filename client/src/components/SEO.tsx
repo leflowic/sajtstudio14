@@ -9,6 +9,17 @@ interface SEOProps {
   structuredData?: object;
 }
 
+// Get absolute URL for Open Graph images
+function getAbsoluteUrl(path: string): string {
+  // In production, use the actual domain
+  if (typeof window !== 'undefined') {
+    const protocol = window.location.protocol;
+    const host = window.location.host;
+    return `${protocol}//${host}${path}`;
+  }
+  return path;
+}
+
 export function SEO({
   title = "Studio LeFlow - Profesionalni Muzički Studio u Beogradu | Snimanje, Miks, Mastering",
   description = "Studio LeFlow - vrhunski muzički studio u Beogradu. Snimanje pesama, miks i mastering, voice over, podcast produkcija. Najsavremenija oprema, iskusni producenti. Rezervišite termin!",
@@ -28,7 +39,7 @@ export function SEO({
     "producent muzike beograd",
     "recording studio belgrade"
   ],
-  ogImage = "/og-image.jpg",
+  ogImage = "/public/og-image.jpg",
   ogType = "website",
   structuredData,
 }: SEOProps) {
@@ -52,19 +63,25 @@ export function SEO({
     setMetaTag('description', description);
     setMetaTag('keywords', keywords.join(', '));
     
+    // Get absolute URL for Open Graph image
+    const absoluteOgImage = getAbsoluteUrl(ogImage);
+    
     // Open Graph tags
     setMetaTag('og:title', title, true);
     setMetaTag('og:description', description, true);
-    setMetaTag('og:image', ogImage, true);
+    setMetaTag('og:image', absoluteOgImage, true);
+    setMetaTag('og:image:width', '1200', true);
+    setMetaTag('og:image:height', '630', true);
     setMetaTag('og:type', ogType, true);
     setMetaTag('og:site_name', 'Studio LeFlow', true);
     setMetaTag('og:locale', 'sr_RS', true);
+    setMetaTag('og:url', window.location.href, true);
     
     // Twitter cards
     setMetaTag('twitter:card', 'summary_large_image');
     setMetaTag('twitter:title', title);
     setMetaTag('twitter:description', description);
-    setMetaTag('twitter:image', ogImage);
+    setMetaTag('twitter:image', absoluteOgImage);
     
     // Structured data
     if (structuredData) {

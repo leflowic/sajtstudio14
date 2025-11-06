@@ -25,6 +25,11 @@ app.use('/attached_assets', express.static(path.join(process.cwd(), 'attached_as
   immutable: true,
 }));
 
+// Serve static files from public directory (Open Graph images, etc.)
+app.use('/public', express.static(path.join(process.cwd(), 'public'), {
+  maxAge: '1d',
+}));
+
 // Trust proxy - omogućava dobijanje prave IP adrese klijenta
 // Postavljamo na 1 jer je Replit iza jednog proxy hop-a
 app.set('trust proxy', 1);
