@@ -64,3 +64,10 @@ The website features a modern design utilizing Tailwind CSS and shadcn/ui compon
 - **Contact Information Update**: Updated all contact information across site - email changed to info@studioleflow.com, phone +381 63 734 7023, Instagram @studioleflow added, working hours section removed from footer
 - **CSP Headers**: Added frame-src directive for YouTube iframe support (youtube.com and youtube-nocookie.com) to enable video embeds on Projekti page
 - **Scroll Indicator**: Implemented minimalist animated scroll indicator on homepage hero section - chevron icon with smooth bounce animation, auto-hides on scroll, smooth scroll to services section on click
+- **Banned User Authorization**: Added banned status checks to all authenticated middleware (`requireAdmin`, `requireVerifiedEmail`) - banned users are now completely blocked from all actions (voting, comments, uploads, admin panel)
+- **Case-Insensitive Email/Username**: 
+  - Implemented case-insensitive lookup in `getUserByEmail` and `getUserByUsername` using SQL `LOWER()`
+  - Added lowercase normalization in registration and update-profile routes
+  - Database audit confirmed no duplicate accounts (0 duplicates by email, 0 by username)
+  - Users can now login with any case variation of their email/username (e.g., User@Email.com, user@email.com)
+- **YouTube Age-Restricted Warning**: Added warning in admin panel when adding YouTube videos - age-restricted videos (18+) cannot be embedded via iframe and will not display correctly
