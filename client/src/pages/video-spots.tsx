@@ -79,7 +79,7 @@ export default function VideoSpots() {
       queryClient.invalidateQueries({ queryKey: ["/api/video-spots"] });
       toast({
         title: "Uspešno dodato",
-        description: "Novi video spot je dodat",
+        description: "Novi projekat je dodat",
       });
       setIsDialogOpen(false);
       setFormData({ title: "", description: "", artist: "", youtubeUrl: "" });
@@ -113,7 +113,7 @@ export default function VideoSpots() {
       queryClient.invalidateQueries({ queryKey: ["/api/video-spots"] });
       toast({
         title: "Uspešno ažurirano",
-        description: "Video spot je ažuriran",
+        description: "Projekat je ažuriran",
       });
       setIsDialogOpen(false);
       setEditingSpot(null);
@@ -145,7 +145,7 @@ export default function VideoSpots() {
       queryClient.invalidateQueries({ queryKey: ["/api/video-spots"] });
       toast({
         title: "Uspešno obrisano",
-        description: "Video spot je obrisan",
+        description: "Projekat je obrisan",
       });
     },
     onError: () => {
@@ -184,9 +184,9 @@ export default function VideoSpots() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
       <SEO
-        title="Video Spotovi - Studio LeFlow"
-        description="Pogledajte muzičke spotove koje smo proizveli u Studio LeFlow. Profesionalna produkcija video spotova u Beogradu."
-        keywords={["video spotovi", "muzička produkcija", "studio leflow", "beograd", "snimanje spotova"]}
+        title="Projekti - Studio LeFlow"
+        description="Projekti u kojima je naš tim učestvovao - video spotovi, pesme i muzička produkcija. Profesionalni muzički studio u Beogradu."
+        keywords={["muzička produkcija", "studio leflow", "beograd", "video spotovi", "produkcija pesama", "snimanje muzike", "muzički projekti"]}
       />
 
       <section className="py-20">
@@ -197,10 +197,10 @@ export default function VideoSpots() {
                 <Video className="w-8 h-8 text-primary" />
               </div>
               <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                Naši <span className="text-primary">Video Spotovi</span>
+                Naši <span className="text-primary">Projekti</span>
               </h1>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Pogledajte muzičke spotove koje smo proizveli za različite izvođače
+                Projekti u kojima je naš tim učestvovao - pogledajte šta smo kreirali
               </p>
             </div>
           </FadeInWhenVisible>
@@ -213,7 +213,7 @@ export default function VideoSpots() {
                 size="lg"
               >
                 <Plus className="w-5 h-5" />
-                Dodaj Novi Spot
+                Dodaj Novi Projekat
               </Button>
             </div>
           )}
@@ -223,8 +223,8 @@ export default function VideoSpots() {
               <div className="text-center py-12">
                 <p className="text-muted-foreground">
                   {isEditMode
-                    ? "Kliknite na dugme iznad da dodate prvi video spot"
-                    : "Trenutno nema dostupnih video spotova"}
+                    ? "Kliknite na dugme iznad da dodate prvi projekat"
+                    : "Trenutno nema dostupnih projekata"}
                 </p>
               </div>
             </FadeInWhenVisible>
@@ -298,10 +298,10 @@ export default function VideoSpots() {
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
             <DialogTitle>
-              {editingSpot ? "Izmeni Video Spot" : "Dodaj Novi Video Spot"}
+              {editingSpot ? "Izmeni Projekat" : "Dodaj Novi Projekat"}
             </DialogTitle>
             <DialogDescription>
-              Popunite informacije o video spotu. Unesite YouTube URL videa.
+              Popunite informacije o projektu. Unesite YouTube URL videa.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -311,7 +311,7 @@ export default function VideoSpots() {
                 id="title"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Unesite naslov spota"
+                placeholder="Unesite naslov projekta"
               />
             </div>
             <div className="grid gap-2">
@@ -338,7 +338,7 @@ export default function VideoSpots() {
                 id="description"
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Unesite opis spota (opciono)"
+                placeholder="Unesite opis projekta (opciono)"
                 rows={3}
               />
             </div>
@@ -348,7 +348,7 @@ export default function VideoSpots() {
               Otkaži
             </Button>
             <Button onClick={handleSubmit}>
-              {editingSpot ? "Sačuvaj Izmene" : "Dodaj Spot"}
+              {editingSpot ? "Sačuvaj Izmene" : "Dodaj Projekat"}
             </Button>
           </DialogFooter>
         </DialogContent>

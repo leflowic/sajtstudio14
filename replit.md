@@ -22,9 +22,10 @@ The website features a modern design utilizing Tailwind CSS and shadcn/ui compon
   - Team member management (add/delete)
 - **User Authentication**: Email/password authentication with verification.
 - **Project Giveaways**: Monthly project uploads, a voting system, and admin approval for entries.
+- **Portfolio (Projekti Page)**: Showcase of studio's work including video spots and produced songs with YouTube embeds, admin-managed content.
 - **Contact Form**: Direct email notifications.
 - **File Uploads**: MP3 file uploads for projects, image uploads for CMS content.
-- **Admin Panel**: Comprehensive management for users, project approvals, and CMS editing.
+- **Admin Panel**: Comprehensive management for users, project approvals, portfolio projects, and CMS editing.
 
 ### System Design Choices
 - **Database**: PostgreSQL managed by Replit, utilizing Drizzle ORM for schema management (users, projects, votes, comments, contact submissions, CMS content, settings).

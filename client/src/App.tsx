@@ -66,7 +66,7 @@ function Router() {
               <Route path="/pravila" component={Terms} />
               <Route path="/tim" component={Team} />
               <Route path="/kontakt" component={Contact} />
-              <Route path="/spotovi" component={VideoSpots} />
+              <Route path="/projekti" component={VideoSpots} />
               <Route path="/auth" component={AuthPage} />
               <Route path="/prijava" component={AuthPage} />
               <Route path="/registracija" component={AuthPage} />
