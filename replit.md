@@ -63,3 +63,4 @@ The website features a modern design utilizing Tailwind CSS and shadcn/ui compon
 - **Replit Environment Setup**: GitHub import successfully configured - database migrated, workflow set up on port 5000, dependencies installed, server running in development mode
 - **Contact Information Update**: Updated all contact information across site - email changed to info@studioleflow.com, phone +381 63 734 7023, Instagram @studioleflow added, working hours section removed from footer
 - **CSP Headers**: Added frame-src directive for YouTube iframe support (youtube.com and youtube-nocookie.com) to enable video embeds on Projekti page
+- **Scroll Indicator**: Implemented minimalist animated scroll indicator on homepage hero section - chevron icon with smooth bounce animation, auto-hides on scroll, smooth scroll to services section on click
