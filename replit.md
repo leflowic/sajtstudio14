@@ -89,7 +89,9 @@ The website features a modern design utilizing Tailwind CSS and shadcn/ui compon
   - Database: Uses existing settings table with key-value storage (`maintenance_mode` key)
   - API routes: GET `/api/maintenance` (public - anyone can check status), POST `/api/maintenance` (admin only - toggle mode)
   - Middleware: `checkMaintenanceMode` applied to `/api` routes only - blocks API calls for non-admin users when active (allows static files to load)
+  - Allowed API paths during maintenance: `/maintenance`, `/login`, `/logout`, `/user`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/admin` (note: paths without `/api` prefix as middleware is mounted on `/api`)
   - Admin Panel: New "Podešavanja" tab with toggle switch and warning banner when maintenance is active
-  - Frontend: App.tsx checks maintenance status via API and displays maintenance page for non-admin users
-  - Maintenance Page: Clean design with LeFlow logo, "Sajt je u pripremi" message, and contact information (email, phone, Instagram)
+  - Frontend: App.tsx checks maintenance status via API and displays maintenance page for non-admin users except on auth pages (`/auth`, `/prijava`, `/registracija`)
+  - Maintenance Page: Clean design with LeFlow logo (inverted for dark mode visibility), "Sajt je u pripremi" message, contact information (email, phone, Instagram), and "Admin Prijava" link
+  - Admin Login Flow: Non-admin users see maintenance page → click "Admin Prijava" → access `/auth` page → login → full site access as admin
   - Admin bypass: Admins can access entire site and all functionality even when maintenance mode is active
