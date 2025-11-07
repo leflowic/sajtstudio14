@@ -80,3 +80,12 @@ The website features a modern design utilizing Tailwind CSS and shadcn/ui compon
   - Email template matches verification email design (#7c3aed brand color)
   - Reset form email field is read-only to prevent accidental edits
   - Minimum password length: 8 characters
+- **Maintenance Mode**: Site-wide maintenance control system for admins:
+  - Backend: `getMaintenanceMode()` and `setMaintenanceMode()` functions in storage.ts
+  - Database: Uses existing settings table with key-value storage (`maintenance_mode` key)
+  - API routes: GET `/api/maintenance` (public - anyone can check status), POST `/api/maintenance` (admin only - toggle mode)
+  - Middleware: `checkMaintenanceMode` blocks all non-admin users when maintenance mode is active
+  - Admin Panel: New "Podešavanja" tab with toggle switch and warning banner when maintenance is active
+  - Frontend: App.tsx checks maintenance status and displays maintenance page for non-admin users
+  - Maintenance Page: Clean design with LeFlow logo, "Sajt je u pripremi" message, and contact information
+  - Admin bypass: Admins can access entire site even when maintenance mode is active

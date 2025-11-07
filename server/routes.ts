@@ -147,14 +147,18 @@ function requireVerifiedEmail(req: any, res: any, next: any) {
   next();
 }
 
-// Middleware to check if site is in maintenance mode
+// Middleware to check if site is in maintenance mode (for API routes only)
 async function checkMaintenanceMode(req: any, res: any, next: any) {
-  // Allow access to admin routes and auth routes
+  // Allow access to maintenance check, auth routes, and admin routes
   const allowedPaths = [
     '/api/maintenance',
     '/api/login',
     '/api/logout',
     '/api/user',
+    '/api/register',
+    '/api/verify-email',
+    '/api/forgot-password',
+    '/api/reset-password',
     '/api/admin',
   ];
   
@@ -187,11 +191,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Setup authentication routes: /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
 
-  // Apply maintenance mode middleware to all routes except allowed paths
-  app.use(checkMaintenanceMode);
-
-  // Maintenance mode API routes (admin only)
-  app.get("/api/maintenance", requireAdmin, async (_req, res) => {
+  // Maintenance mode API routes
+  // GET is public (anyone can check if site is in maintenance)
+  app.get("/api/maintenance", async (_req, res) => {
     try {
       const isActive = await storage.getMaintenanceMode();
       res.json({ maintenanceMode: isActive });
@@ -201,6 +203,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // POST is admin only (only admins can toggle maintenance mode)
   app.post("/api/maintenance", requireAdmin, async (req, res) => {
     try {
       const { maintenanceMode } = req.body;
@@ -254,6 +257,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       },
     })
   );
+
+  // Apply maintenance mode middleware to all API routes (except allowed paths)
+  // This allows static files and index.html to load, but blocks API calls when in maintenance mode
+  app.use('/api', checkMaintenanceMode);
 
   // Image upload endpoint for CMS
   app.post("/api/upload-image", requireAdmin, multerUpload.single("file"), async (req, res) => {
