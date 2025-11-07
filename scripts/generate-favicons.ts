@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-const sourceImage = 'attached_assets/generated_images/Studio_LeFlow_favicon_icon_b9b6d5f6.png';
+const sourceImage = 'attached_assets/icon_1762539841884.png';
 const outputDir = 'client/public';
 
 const sizes = [

@@ -41,7 +41,7 @@ The website features a modern, responsive design using Tailwind CSS and shadcn/u
 ## Recent Updates (2025-11-07)
 - **Google Search SEO & Favicon Optimization**: Comprehensive SEO improvements for better Google Search visibility:
   - Generated multi-size favicon system (16x16, 32x32, 48x48, 192x192, 512x512, 180x180 Apple, .ico) using Sharp library
-  - Created scripts/generate-favicons.ts for reproducible favicon generation from LeFlow logo
+  - Created scripts/generate-favicons.ts for reproducible favicon generation from authentic LeFlow emblem logo (attached_assets/icon_1762539841884.png)
   - Updated index.html with complete favicon link tags for all devices and Google Search requirements
   - Implemented bidirectional search keywords: "studio leflow" AND "leflow studio" across all pages (home, contact, projects, team, giveaway)
   - Added alternateNames to structured data JSON-LD: ["LeFlow Studio", "LeFlow", "Studio LeFlow Beograd", "LeFlow Studio Beograd"]
