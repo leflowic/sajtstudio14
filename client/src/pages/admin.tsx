@@ -106,11 +106,12 @@ export default function AdminPage() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-admin">
-          <TabsList className="grid w-full grid-cols-6 mb-8" data-testid="tabs-list-admin">
+          <TabsList className="grid w-full grid-cols-7 mb-8" data-testid="tabs-list-admin">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Korisnici</TabsTrigger>
             <TabsTrigger value="projects" data-testid="tab-projects">Projekti</TabsTrigger>
             <TabsTrigger value="comments" data-testid="tab-comments">Komentari</TabsTrigger>
+            <TabsTrigger value="newsletter" data-testid="tab-newsletter">Newsletter</TabsTrigger>
             <TabsTrigger value="cms" data-testid="tab-cms">CMS</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">Podešavanja</TabsTrigger>
           </TabsList>
@@ -129,6 +130,10 @@ export default function AdminPage() {
 
           <TabsContent value="comments">
             <CommentsTab />
+          </TabsContent>
+
+          <TabsContent value="newsletter">
+            <NewsletterTab />
           </TabsContent>
 
           <TabsContent value="cms">
@@ -237,6 +242,180 @@ function SettingsTab() {
         </CardHeader>
         <CardContent>
           <GiveawaySettingsSection />
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function NewsletterTab() {
+  const { toast } = useToast();
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+
+  const { data: subscribers = [], isLoading: subscribersLoading } = useQuery({
+    queryKey: ["/api/newsletter/subscribers"],
+    queryFn: async () => {
+      const response = await fetch("/api/newsletter/subscribers");
+      if (!response.ok) throw new Error("Failed to load subscribers");
+      return await response.json();
+    },
+  });
+
+  const { data: stats, isLoading: statsLoading } = useQuery({
+    queryKey: ["/api/newsletter/stats"],
+    queryFn: async () => {
+      const response = await fetch("/api/newsletter/stats");
+      if (!response.ok) throw new Error("Failed to load stats");
+      return await response.json();
+    },
+  });
+
+  const handleCopyEmail = (email: string) => {
+    navigator.clipboard.writeText(email);
+    setCopiedEmail(email);
+    toast({
+      title: "Kopirano!",
+      description: `Email ${email} je kopiran u clipboard`,
+    });
+    setTimeout(() => setCopiedEmail(null), 2000);
+  };
+
+  const handleCopyAll = () => {
+    const confirmedEmails = subscribers
+      .filter((s: any) => s.status === 'confirmed')
+      .map((s: any) => s.email)
+      .join(', ');
+    navigator.clipboard.writeText(confirmedEmails);
+    toast({
+      title: "Kopirano!",
+      description: `${subscribers.filter((s: any) => s.status === 'confirmed').length} email adresa kopirano`,
+    });
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "N/A";
+    return new Date(dateString).toLocaleDateString("sr-RS", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return <Badge className="bg-green-500">Potvrđeno</Badge>;
+      case "pending":
+        return <Badge variant="outline">Na čekanju</Badge>;
+      case "unsubscribed":
+        return <Badge variant="destructive">Odjavljeno</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Ukupno Pretplatnika</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-3xl font-bold">{stats?.total || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Potvrđeno</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-3xl font-bold text-green-600">{stats?.confirmed || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Na čekanju</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-3xl font-bold text-orange-600">{stats?.pending || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Pretplatnici</CardTitle>
+              <CardDescription>Lista svih email pretplatnika</CardDescription>
+            </div>
+            <Button onClick={handleCopyAll} variant="outline" size="sm">
+              Kopiraj sve potvrđene email adrese
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {subscribersLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : subscribers.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">
+              Nema pretplatnika
+            </p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Datum prijave</TableHead>
+                    <TableHead>Datum potvrde</TableHead>
+                    <TableHead>Akcije</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subscribers.map((subscriber: any) => (
+                    <TableRow key={subscriber.id}>
+                      <TableCell className="font-medium">{subscriber.email}</TableCell>
+                      <TableCell>{getStatusBadge(subscriber.status)}</TableCell>
+                      <TableCell>{formatDate(subscriber.subscribedAt)}</TableCell>
+                      <TableCell>{formatDate(subscriber.confirmedAt)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleCopyEmail(subscriber.email)}
+                        >
+                          {copiedEmail === subscriber.email ? "Kopirano!" : "Kopiraj"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
