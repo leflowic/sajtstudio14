@@ -156,7 +156,7 @@ export default function Team() {
       instagram,
       instagramHandle,
       initials,
-      image: memberImages[index] || leflowImage,
+      image: getCmsValue("members", `member_${index}_image`, memberImages[index] || leflowImage),
       featured: index === 1,
       index
     };
