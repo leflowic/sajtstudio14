@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { queryClient } from "@/lib/queryClient";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import {
   Dialog,
@@ -45,7 +46,6 @@ export default function MaintenancePage() {
   const [userId, setUserId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { user: currentUser, refetchUser } = useAuth();
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -118,7 +118,7 @@ export default function MaintenancePage() {
         throw new Error(result.error || "Neispravan kod");
       }
 
-      await refetchUser();
+      queryClient.setQueryData(["/api/user"], result.user);
       setShowLoginDialog(false);
       resetDialog();
       toast({
@@ -225,12 +225,12 @@ export default function MaintenancePage() {
                     name="username"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Korisničko ime</FormLabel>
+                        <FormLabel>Korisničko ime ili Email</FormLabel>
                         <FormControl>
                           <div className="relative">
                             <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
-                              placeholder="Unesite korisničko ime"
+                              placeholder="Unesite korisničko ime ili email"
                               {...field}
                               className="pl-10"
                               autoComplete="username"

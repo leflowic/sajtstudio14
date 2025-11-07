@@ -387,11 +387,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { username, password } = req.body;
       
       if (!username || !password) {
-        return res.status(400).json({ error: "Korisničko ime i lozinka su obavezni" });
+        return res.status(400).json({ error: "Korisničko ime ili email i lozinka su obavezni" });
       }
       
-      // Get user by username (case-insensitive)
-      const user = await storage.getUserByUsername(username);
+      // Get user by username OR email (check if input contains @)
+      const isEmail = username.includes('@');
+      const user = isEmail 
+        ? await storage.getUserByEmail(username)
+        : await storage.getUserByUsername(username);
       
       // Generic error message to prevent user enumeration
       if (!user) {
