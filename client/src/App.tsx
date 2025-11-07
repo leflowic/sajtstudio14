@@ -24,6 +24,7 @@ import Settings from "@/pages/settings";
 import VideoSpots from "@/pages/video-spots";
 import NotFound from "@/pages/not-found";
 import MaintenancePage from "@/pages/maintenance";
+import NewsletterConfirmation from "@/pages/newsletter-confirmation";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 
@@ -89,6 +90,7 @@ function Router() {
               <Route path="/prijava" component={AuthPage} />
               <Route path="/registracija" component={AuthPage} />
               <Route path="/verify-email" component={VerifyEmailPage} />
+              <Route path="/newsletter/potvrda/:token" component={NewsletterConfirmation} />
               <Route path="/uslovi-koriscenja" component={TermsOfUse} />
               <ProtectedRoute path="/giveaway" component={Giveaway} />
               <ProtectedRoute path="/admin" component={AdminPage} />

@@ -10,6 +10,7 @@ import { EditableImage } from "@/components/cms/EditableImage";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { ScrollIndicator } from "@/components/ScrollIndicator";
 import { SEO } from "@/components/SEO";
+import { NewsletterForm } from "@/components/newsletter-form";
 import type { CmsContent } from "@shared/schema";
 import heroImage from "@assets/generated_images/hero-optimized.webp";
 import heroImageFallback from "@assets/generated_images/Warm_Audio_WA-47_microphone_closeup_3054e6fe.png";
@@ -360,6 +361,26 @@ export default function Home() {
               </div>
             </FadeInWhenVisible>
           </div>
+        </div>
+      </section>
+
+      <section className="py-20 lg:py-32 bg-gradient-to-br from-primary/5 to-primary/10">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <FadeInWhenVisible>
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+              Budite u Toku sa Najnovijim Novostima
+            </h2>
+          </FadeInWhenVisible>
+          
+          <FadeInWhenVisible delay={0.2}>
+            <p className="text-xl mb-12 text-muted-foreground max-w-2xl mx-auto">
+              Prijavite se na naš newsletter i budite prvi koji će saznati o novim projektima, promocijama i ekskluzivnim ponudama
+            </p>
+          </FadeInWhenVisible>
+          
+          <FadeInWhenVisible delay={0.4}>
+            <NewsletterForm />
+          </FadeInWhenVisible>
         </div>
       </section>
 

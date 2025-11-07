@@ -1,6 +1,7 @@
 import { Link } from "wouter";
 import { MapPin, Phone, Mail, Instagram } from "lucide-react";
 import { FadeInWhenVisible } from "@/components/motion/FadeIn";
+import { NewsletterForm } from "@/components/newsletter-form";
 import leflowLogo from "@/assets/leflow-logo.png";
 
 export function Footer() {
@@ -31,7 +32,7 @@ export function Footer() {
   return (
     <footer className="bg-muted/30 border-t">
       <div className="max-w-7xl mx-auto px-6 py-12 lg:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 lg:gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
           <FadeInWhenVisible delay={0.1}>
             <div>
               <div className="flex items-center gap-2 mb-4">
@@ -110,6 +111,16 @@ export function Footer() {
                 </li>
               ))}
             </ul>
+            </div>
+          </FadeInWhenVisible>
+
+          <FadeInWhenVisible delay={0.4}>
+            <div>
+              <h3 className="font-bold mb-4">Newsletter</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Budite u toku sa najnovijim novostima i promocijama
+              </p>
+              <NewsletterForm variant="footer" />
             </div>
           </FadeInWhenVisible>
         </div>
