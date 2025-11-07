@@ -9,7 +9,7 @@ import { useEditMode } from "@/contexts/EditModeContext";
 import leflowLogo from "@/assets/leflow-logo.png";
 
 export function Header() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { user, logoutMutation } = useAuth();
   const { isEditMode, toggleEditMode } = useEditMode();
@@ -38,7 +38,7 @@ export function Header() {
 
   const scrollToServices = () => {
     if (location !== "/") {
-      window.location.href = "/#usluge";
+      setLocation("/#usluge");
     } else {
       const element = document.getElementById("usluge");
       if (element) {

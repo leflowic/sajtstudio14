@@ -1,4 +1,5 @@
-import { Link } from "wouter";
+import { useEffect } from "react";
+import { Link, useLocation } from "wouter";
 import { Music, Mic2, Video, ArrowRight, CheckCircle2, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,6 +16,8 @@ import type { CmsContent } from "@shared/schema";
 import videoSetupImage from "@assets/generated_images/Video_camera_production_setup_199f7c64.png";
 
 export default function Home() {
+  const [location] = useLocation();
+  
   const { data: cmsContent = [] } = useQuery<CmsContent[]>({
     queryKey: ["/api/cms/content", "home"],
     queryFn: async () => {
@@ -27,6 +30,19 @@ export default function Home() {
       return Array.isArray(data) ? data : [];
     },
   });
+
+  // Handle hash navigation for services section
+  useEffect(() => {
+    if (window.location.hash === "#usluge") {
+      // Wait for layout to paint before scrolling
+      setTimeout(() => {
+        const element = document.getElementById("usluge");
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+    }
+  }, [location]);
 
   const getCmsValue = (section: string, key: string, fallback: string = "") => {
     return cmsContent.find(c => c.section === section && c.contentKey === key)?.contentValue || fallback;
@@ -376,6 +392,79 @@ export default function Home() {
           <FadeInWhenVisible delay={0.4}>
             <NewsletterForm />
           </FadeInWhenVisible>
+        </div>
+      </section>
+
+      <section className="py-20 bg-background">
+        <div className="max-w-7xl mx-auto px-6">
+          <FadeInWhenVisible>
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight">
+                Studio Oprema
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                Profesionalna oprema koja garantuje vrhunski zvuk i produkciju
+              </p>
+            </div>
+          </FadeInWhenVisible>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-5xl mx-auto">
+            <FadeInWhenVisible delay={0.1}>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <Headphones className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xl font-bold mb-2">Universal Audio Apollo Twin X Duo</h3>
+                    <p className="text-muted-foreground">
+                      Profesionalni Thunderbolt audio interface sa Realtime UAD processing-om. Kristalno čist konvertor i ultra niska latencija za precizno snimanje i monitoring.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeInWhenVisible>
+
+            <FadeInWhenVisible delay={0.2}>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <Headphones className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xl font-bold mb-2">Beyerdynamic DT 990 PRO & DT 770 PRO</h3>
+                    <p className="text-muted-foreground">
+                      Studio referentne slušalice za precizno miksovanje i mastering. DT 990 PRO (otvorene) za analitičko slušanje, DT 770 PRO (zatvorene) za snimanje bez curenja zvuka.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeInWhenVisible>
+
+            <FadeInWhenVisible delay={0.3}>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xl font-bold mb-2">UAD Plugin Suite - Sve Originalne Licence</h3>
+                    <p className="text-muted-foreground">
+                      Kompletna kolekcija originalnih Universal Audio pluginova: Neve 1073, Pultec EQ, 1176 Compressor, LA-2A, Avalon 737 i mnogi drugi. Legendarni analog zvuk u digitalnom domenu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeInWhenVisible>
+
+            <FadeInWhenVisible delay={0.4}>
+              <div className="space-y-4">
+                <div className="flex items-start gap-3">
+                  <CheckCircle2 className="w-6 h-6 text-primary mt-1 flex-shrink-0" />
+                  <div>
+                    <h3 className="text-xl font-bold mb-2">AutoTune RealTime Advanced - Bez Kasnjenja</h3>
+                    <p className="text-muted-foreground">
+                      Realtime Auto-Tune processing sa ultra niskom latencijom - performeri mogu da snimaju sa live pitch correction efektom bez čujnog kasnjenja. Profesionalni zvuk tokom snimanja.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </FadeInWhenVisible>
+          </div>
         </div>
       </section>
 
