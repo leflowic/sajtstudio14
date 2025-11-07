@@ -593,7 +593,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           // Send confirmation email
           try {
-            const confirmUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/newsletter/potvrda/${confirmationToken}`;
+            const baseUrl = process.env.REPLIT_DOMAINS 
+              ? `https://${process.env.REPLIT_DOMAINS}` 
+              : 'http://localhost:5000';
+            const confirmUrl = `${baseUrl}/newsletter/potvrda/${confirmationToken}`;
             
             await sendEmail({
               to: email,
@@ -633,7 +636,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Send confirmation email
       try {
-        const confirmUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/newsletter/potvrda/${confirmationToken}`;
+        const baseUrl = process.env.REPLIT_DOMAINS 
+          ? `https://${process.env.REPLIT_DOMAINS}` 
+          : 'http://localhost:5000';
+        const confirmUrl = `${baseUrl}/newsletter/potvrda/${confirmationToken}`;
         
         await sendEmail({
           to: email,
