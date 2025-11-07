@@ -14,7 +14,7 @@ export default function MaintenancePage() {
             <img
               src="/attached_assets/logo/studioleflow-transparent.png"
               alt="Studio LeFlow"
-              className="h-32 w-auto dark:invert"
+              className="h-32 w-auto filter invert"
             />
           </div>
 
@@ -43,6 +43,15 @@ export default function MaintenancePage() {
                 Instagram: <a href="https://instagram.com/studioleflow" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">@studioleflow</a>
               </p>
             </div>
+          </div>
+
+          <div className="mt-12">
+            <a 
+              href="/auth" 
+              className="text-sm text-muted-foreground hover:text-primary transition-colors"
+            >
+              Admin Prijava
+            </a>
           </div>
         </motion.div>
       </div>

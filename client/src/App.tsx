@@ -58,8 +58,11 @@ function Router() {
     staleTime: 30000, // Cache for 30 seconds
   });
 
-  // If maintenance mode is active and user is not admin, show maintenance page
-  const isMaintenanceMode = maintenanceData?.maintenanceMode && user?.role !== "admin";
+  // Allow access to auth pages even during maintenance mode
+  const isAuthPage = location === "/auth" || location === "/prijava" || location === "/registracija";
+  
+  // If maintenance mode is active and user is not admin and not on auth page, show maintenance page
+  const isMaintenanceMode = maintenanceData?.maintenanceMode && user?.role !== "admin" && !isAuthPage;
   
   if (isMaintenanceMode) {
     return <MaintenancePage />;
