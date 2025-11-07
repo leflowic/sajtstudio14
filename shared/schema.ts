@@ -146,6 +146,17 @@ export const videoSpots = pgTable("video_spots", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Newsletter Subscribers table - for email subscriptions
+export const newsletterSubscribers = pgTable("newsletter_subscribers", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  status: text("status").notNull().default("pending"), // "pending", "confirmed", "unsubscribed"
+  confirmationToken: text("confirmation_token"),
+  confirmedAt: timestamp("confirmed_at"),
+  subscribedAt: timestamp("subscribed_at").defaultNow().notNull(),
+  unsubscribedAt: timestamp("unsubscribed_at"),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
@@ -271,3 +282,18 @@ export const insertVideoSpotSchema = createInsertSchema(videoSpots).omit({
 
 export type InsertVideoSpot = z.infer<typeof insertVideoSpotSchema>;
 export type VideoSpot = typeof videoSpots.$inferSelect;
+
+// Newsletter Subscribers schemas
+export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({
+  id: true,
+  status: true,
+  confirmationToken: true,
+  confirmedAt: true,
+  subscribedAt: true,
+  unsubscribedAt: true,
+}).extend({
+  email: z.string().email("Unesite validnu email adresu"),
+});
+
+export type InsertNewsletterSubscriber = z.infer<typeof insertNewsletterSubscriberSchema>;
+export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;

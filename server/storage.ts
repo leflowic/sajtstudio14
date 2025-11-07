@@ -16,6 +16,8 @@ import {
   type InsertCmsMedia,
   type VideoSpot,
   type InsertVideoSpot,
+  type NewsletterSubscriber,
+  type InsertNewsletterSubscriber,
   contactSubmissions,
   users,
   projects,
@@ -25,6 +27,7 @@ import {
   cmsContent,
   cmsMedia,
   videoSpots,
+  newsletterSubscribers,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -87,6 +90,16 @@ export interface IStorage {
   getGiveawaySettings(): Promise<{ isActive: boolean }>;
   getMaintenanceMode(): Promise<boolean>;
   setMaintenanceMode(isActive: boolean): Promise<void>;
+
+  // Newsletter
+  createNewsletterSubscriber(email: string, confirmationToken: string): Promise<NewsletterSubscriber>;
+  getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined>;
+  getNewsletterSubscriberByToken(token: string): Promise<NewsletterSubscriber | undefined>;
+  confirmNewsletterSubscription(token: string): Promise<boolean>;
+  unsubscribeNewsletter(email: string): Promise<boolean>;
+  getAllNewsletterSubscribers(): Promise<NewsletterSubscriber[]>;
+  getConfirmedNewsletterSubscribers(): Promise<NewsletterSubscriber[]>;
+  getNewsletterStats(): Promise<{ total: number; confirmed: number; pending: number }>;
 
   // CMS Content
   getCmsContent(page: string, section: string, contentKey: string): Promise<CmsContent | undefined>;
@@ -614,6 +627,94 @@ export class DatabaseStorage implements IStorage {
 
   async setMaintenanceMode(isActive: boolean): Promise<void> {
     await this.setSetting('maintenance_mode', isActive.toString());
+  }
+
+  // Newsletter functions
+  async createNewsletterSubscriber(email: string, confirmationToken: string): Promise<NewsletterSubscriber> {
+    const [subscriber] = await db.insert(newsletterSubscribers)
+      .values({
+        email: email.toLowerCase(),
+        confirmationToken,
+        status: 'pending',
+      })
+      .returning();
+    return subscriber;
+  }
+
+  async getNewsletterSubscriberByEmail(email: string): Promise<NewsletterSubscriber | undefined> {
+    const [subscriber] = await db.select()
+      .from(newsletterSubscribers)
+      .where(sql`LOWER(${newsletterSubscribers.email}) = LOWER(${email})`)
+      .limit(1);
+    return subscriber;
+  }
+
+  async getNewsletterSubscriberByToken(token: string): Promise<NewsletterSubscriber | undefined> {
+    const [subscriber] = await db.select()
+      .from(newsletterSubscribers)
+      .where(eq(newsletterSubscribers.confirmationToken, token))
+      .limit(1);
+    return subscriber;
+  }
+
+  async confirmNewsletterSubscription(token: string): Promise<boolean> {
+    const subscriber = await this.getNewsletterSubscriberByToken(token);
+    
+    if (!subscriber || subscriber.status === 'confirmed') {
+      return false;
+    }
+
+    await db.update(newsletterSubscribers)
+      .set({
+        status: 'confirmed',
+        confirmedAt: new Date(),
+        confirmationToken: null,
+      })
+      .where(eq(newsletterSubscribers.id, subscriber.id));
+
+    return true;
+  }
+
+  async unsubscribeNewsletter(email: string): Promise<boolean> {
+    const subscriber = await this.getNewsletterSubscriberByEmail(email);
+    
+    if (!subscriber || subscriber.status === 'unsubscribed') {
+      return false;
+    }
+
+    await db.update(newsletterSubscribers)
+      .set({
+        status: 'unsubscribed',
+        unsubscribedAt: new Date(),
+      })
+      .where(eq(newsletterSubscribers.id, subscriber.id));
+
+    return true;
+  }
+
+  async getAllNewsletterSubscribers(): Promise<NewsletterSubscriber[]> {
+    return await db.select()
+      .from(newsletterSubscribers)
+      .orderBy(desc(newsletterSubscribers.subscribedAt));
+  }
+
+  async getConfirmedNewsletterSubscribers(): Promise<NewsletterSubscriber[]> {
+    return await db.select()
+      .from(newsletterSubscribers)
+      .where(eq(newsletterSubscribers.status, 'confirmed'))
+      .orderBy(desc(newsletterSubscribers.confirmedAt));
+  }
+
+  async getNewsletterStats(): Promise<{ total: number; confirmed: number; pending: number }> {
+    const allSubscribers = await db.select()
+      .from(newsletterSubscribers)
+      .where(sql`${newsletterSubscribers.status} != 'unsubscribed'`);
+
+    const total = allSubscribers.length;
+    const confirmed = allSubscribers.filter(s => s.status === 'confirmed').length;
+    const pending = allSubscribers.filter(s => s.status === 'pending').length;
+
+    return { total, confirmed, pending };
   }
 
   // Video Spots
