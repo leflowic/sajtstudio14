@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -157,11 +157,72 @@ export const newsletterSubscribers = pgTable("newsletter_subscribers", {
   unsubscribedAt: timestamp("unsubscribed_at"),
 });
 
+// Conversations table - tracks message threads between users
+// Database-level canonical ordering enforcement:
+// - PostgreSQL TRIGGER automatically swaps user1_id/user2_id so user1_id < user2_id (BEFORE INSERT/UPDATE)
+// - This guarantees unique constraint (user1_id, user2_id) prevents duplicates (A,B) and (B,A)
+// - Application can optionally use normalizeConversationUsers() helper for consistency
+export const conversations = pgTable("conversations", {
+  id: serial("id").primaryKey(),
+  user1Id: integer("user1_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  user2Id: integer("user2_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Ensure unique conversation between two users (works ONLY if application normalizes IDs)
+  uniqueUsers: unique().on(table.user1Id, table.user2Id),
+  // Performance index for sorting conversations by last message
+  lastMessageIdx: index("conversations_last_message_idx").on(table.lastMessageAt),
+}));
+
+// Messages table - individual messages in conversations
+export const messages = pgTable("messages", {
+  id: serial("id").primaryKey(),
+  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+  senderId: integer("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  receiverId: integer("receiver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  imageUrl: text("image_url"), // Optional image attachment
+  deleted: boolean("deleted").notNull().default(false), // Soft delete
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Performance indexes for fetching messages
+  conversationIdx: index("messages_conversation_idx").on(table.conversationId),
+  createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
+  // Composite index for conversation + timestamp (most common query)
+  conversationCreatedIdx: index("messages_conversation_created_idx").on(table.conversationId, table.createdAt),
+}));
+
+// Message Reads table - tracks when messages are read (for seen checkmarks)
+export const messageReads = pgTable("message_reads", {
+  id: serial("id").primaryKey(),
+  messageId: integer("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at").defaultNow().notNull(),
+}, (table) => ({
+  // One read record per user per message
+  uniqueUserMessage: unique().on(table.userId, table.messageId),
+  // Performance index for checking read status
+  messageIdx: index("message_reads_message_idx").on(table.messageId),
+}));
+
+// Admin Message Audit table - logs when admins view conversations
+export const adminMessageAudit = pgTable("admin_message_audit", {
+  id: serial("id").primaryKey(),
+  adminId: integer("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  viewedUser1Id: integer("viewed_user1_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  viewedUser2Id: integer("viewed_user2_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   projects: many(projects),
   votes: many(votes),
   comments: many(comments),
+  sentMessages: many(messages, { relationName: "sentMessages" }),
+  receivedMessages: many(messages, { relationName: "receivedMessages" }),
+  messageReads: many(messageReads),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
@@ -191,6 +252,47 @@ export const commentsRelations = relations(comments, ({ one }) => ({
   }),
   user: one(users, {
     fields: [comments.userId],
+    references: [users.id],
+  }),
+}));
+
+export const conversationsRelations = relations(conversations, ({ one, many }) => ({
+  user1: one(users, {
+    fields: [conversations.user1Id],
+    references: [users.id],
+  }),
+  user2: one(users, {
+    fields: [conversations.user2Id],
+    references: [users.id],
+  }),
+  messages: many(messages),
+}));
+
+export const messagesRelations = relations(messages, ({ one, many }) => ({
+  conversation: one(conversations, {
+    fields: [messages.conversationId],
+    references: [conversations.id],
+  }),
+  sender: one(users, {
+    fields: [messages.senderId],
+    references: [users.id],
+    relationName: "sentMessages",
+  }),
+  receiver: one(users, {
+    fields: [messages.receiverId],
+    references: [users.id],
+    relationName: "receivedMessages",
+  }),
+  reads: many(messageReads),
+}));
+
+export const messageReadsRelations = relations(messageReads, ({ one }) => ({
+  message: one(messages, {
+    fields: [messageReads.messageId],
+    references: [messages.id],
+  }),
+  user: one(users, {
+    fields: [messageReads.userId],
     references: [users.id],
   }),
 }));
@@ -297,3 +399,27 @@ export const insertNewsletterSubscriberSchema = createInsertSchema(newsletterSub
 
 export type InsertNewsletterSubscriber = z.infer<typeof insertNewsletterSubscriberSchema>;
 export type NewsletterSubscriber = typeof newsletterSubscribers.$inferSelect;
+
+// Messaging types
+export type Conversation = typeof conversations.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export type MessageRead = typeof messageReads.$inferSelect;
+export type AdminMessageAudit = typeof adminMessageAudit.$inferSelect;
+
+// Messaging insert schemas
+export const insertMessageSchema = createInsertSchema(messages).omit({
+  id: true,
+  createdAt: true,
+  deleted: true,
+}).extend({
+  content: z.string().min(1, "Poruka ne može biti prazna").max(5000, "Poruka može imati najviše 5000 karaktera"),
+  imageUrl: z.string().url("Nevažeći URL").optional().or(z.literal("")),
+});
+
+export type InsertMessage = z.infer<typeof insertMessageSchema>;
+
+// Helper function to normalize conversation user IDs (canonical ordering)
+// MUST be used before INSERT/SELECT to prevent duplicate conversations
+export function normalizeConversationUsers(userId1: number, userId2: number): [number, number] {
+  return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
+}

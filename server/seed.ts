@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { cmsContent } from "../shared/schema";
+import { sql } from "drizzle-orm";
 
 const defaultCmsContent = [
   // Hero section
@@ -26,9 +27,54 @@ const defaultCmsContent = [
   { page: 'home', section: 'cta', contentKey: 'description', contentValue: 'Zakažite besplatnu konsultaciju i razgovarajmo o vašoj muzičkoj viziji' },
 ];
 
+// Ensure messaging database triggers exist
+async function ensureMessagingTriggers() {
+  try {
+    console.log('🔧 Ensuring messaging triggers...');
+    
+    // Create function that enforces canonical ordering (user1_id < user2_id)
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION enforce_canonical_conversation_users()
+      RETURNS TRIGGER AS $$
+      DECLARE
+        temp INT;
+      BEGIN
+        -- If user1_id > user2_id, swap them to enforce canonical ordering
+        IF NEW.user1_id > NEW.user2_id THEN
+          temp := NEW.user1_id;
+          NEW.user1_id := NEW.user2_id;
+          NEW.user2_id := temp;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    
+    // Create trigger that runs before INSERT or UPDATE on conversations
+    await db.execute(sql`
+      DROP TRIGGER IF EXISTS trigger_canonical_conversation_users ON conversations;
+    `);
+    
+    await db.execute(sql`
+      CREATE TRIGGER trigger_canonical_conversation_users
+      BEFORE INSERT OR UPDATE ON conversations
+      FOR EACH ROW
+      EXECUTE FUNCTION enforce_canonical_conversation_users();
+    `);
+    
+    console.log('✅ Messaging triggers ensured');
+  } catch (error) {
+    console.error('❌ Error ensuring messaging triggers:', error);
+    throw error;
+  }
+}
+
 export async function seedCmsContent() {
   try {
     console.log('🌱 Checking CMS content...');
+    
+    // Ensure messaging triggers exist (database-level canonical ordering enforcement)
+    await ensureMessagingTriggers();
     
     // Check if CMS content already exists
     const existingContent = await db.select().from(cmsContent).limit(1);
