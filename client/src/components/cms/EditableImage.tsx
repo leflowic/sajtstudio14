@@ -131,6 +131,7 @@ export function EditableImage({
         src={previewUrl || fallbackSrc}
         alt={alt}
         draggable={false}
+        onContextMenu={(e) => e.preventDefault()}
         className={cn(
           "select-none",
           className,

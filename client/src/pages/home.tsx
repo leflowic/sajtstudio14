@@ -156,7 +156,7 @@ export default function Home() {
             className="w-full h-full object-cover scale-105 [filter:blur(6px)]"
           />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-black/30 to-black/30" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/65 to-black/65" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-6 py-20 text-center">
           <motion.div 

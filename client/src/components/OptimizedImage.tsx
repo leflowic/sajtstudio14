@@ -1,4 +1,4 @@
-import { ImgHTMLAttributes, useState } from 'react';
+import { ImgHTMLAttributes, useState, type MouseEvent } from 'react';
 
 interface OptimizedImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'loading'> {
   src: string;
@@ -22,6 +22,7 @@ export function OptimizedImage({
     loading: priority ? "eager" : "lazy",
     decoding: priority ? "sync" : "async",
     onLoad: () => setIsLoaded(true),
+    onContextMenu: (e: MouseEvent) => e.preventDefault(),
     draggable: false,
     className: `transition-opacity duration-300 select-none ${isLoaded ? 'opacity-100' : 'opacity-0'} ${className}`,
     ...props
