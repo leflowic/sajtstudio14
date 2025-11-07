@@ -1,125 +1,39 @@
 # Studio LeFlow - Music Production Studio Website
 
 ## Overview
-Studio LeFlow is a professional music production studio based in Belgrade, Serbia, offering recording, mixing/mastering, instrumental production, and complete song creation services. The project aims to provide a dynamic online presence for the studio, built with a React + TypeScript frontend and an Express.js backend. It focuses on showcasing services, engaging users through project giveaways, and enabling easy content management for administrators.
+Studio LeFlow is a professional music production studio based in Belgrade, Serbia, offering comprehensive music production services. The project aims to establish a dynamic online presence with a focus on showcasing services, engaging users through project giveaways, and providing robust content management for administrators. The platform supports recording, mixing/mastering, instrumental production, and complete song creation, aspiring to expand its market reach and user base through an interactive and modern website.
 
 ## User Preferences
 I want iterative development. Ask before making major changes. I prefer detailed explanations.
 
 ## System Architecture
 
-### Technology Stack
-**Frontend:** React 18 with TypeScript, Vite, Tailwind CSS + shadcn/ui, Framer Motion for UI animations, Wouter for routing, TanStack Query for server state management, React Hook Form + Zod for form validation.
+### UI/UX Decisions
+The website features a modern, responsive design using Tailwind CSS and shadcn/ui components, enhanced by Framer Motion for animations and smooth transitions. It incorporates the Studio LeFlow transparent emblem logo with automatic color inversion for dark/light themes. SEO optimization is a key focus, including dynamic meta tags, Open Graph tags, structured data, sitemap, robots.txt, and geo-tags. The UI is primarily in Serbian.
+
+### Technical Implementations
+**Frontend:** React 18 with TypeScript, Vite, Tailwind CSS + shadcn/ui, Framer Motion, Wouter for routing, TanStack Query for server state management, React Hook Form + Zod for form validation.
 **Backend:** Express.js with TypeScript, Drizzle ORM (PostgreSQL), Passport.js for authentication, Express Session.
 
-### UI/UX Decisions
-The website features a modern design utilizing Tailwind CSS and shadcn/ui components. Framer Motion is integrated throughout for professional animations, smooth page transitions, and enhanced user experience. The design prioritizes responsiveness and includes accessibility considerations. The Studio LeFlow transparent emblem logo is integrated, with automatic color inversion for dark/light themes. SEO optimization is a key focus, including dynamic meta tags, Open Graph tags, structured data, sitemap, robots.txt, and geo-tags for local SEO.
-
-### Key Features
-- **CMS Content Management**: Admins can edit site content directly on pages ("Izmeni Sajt" toggle) with an inline editing system for:
-  - Text editing (hero sections, CTA, service descriptions)
-  - Image uploads and management (service images, equipment photos)
-  - Team member management (add/delete)
-- **User Authentication**: Email/password authentication with verification.
-- **Project Giveaways**: Monthly project uploads, a voting system, and admin approval for entries.
-- **Portfolio (Projekti Page)**: Showcase of studio's work including video spots and produced songs with YouTube embeds, admin-managed content.
+### Feature Specifications
+- **CMS Content Management**: Inline editing for text, image uploads, and team member management, activated via an "Izmeni Sajt" toggle.
+- **User Authentication**: Email/password authentication with verification, including 2FA for admin login during maintenance.
+- **Project Giveaways**: Monthly project uploads, a voting system, and admin approval.
+- **Portfolio (Projekti Page)**: Showcase studio work with YouTube embeds, managed by admins.
 - **Contact Form**: Direct email notifications.
-- **File Uploads**: MP3 file uploads for projects, image uploads for CMS content.
-- **Admin Panel**: Comprehensive management for users, project approvals, portfolio projects, and CMS editing.
+- **File Uploads**: MP3 files for projects, images for CMS.
+- **Admin Panel**: Comprehensive management for users, project approvals, portfolio, CMS editing, newsletter subscribers, and maintenance mode.
+- **Newsletter System**: Double opt-in email confirmation with admin management and statistics.
+- **Password Management**: Secure forgot/reset password flows with email verification codes.
+- **Maintenance Mode**: Site-wide control for administrators, allowing admin access while the public sees a maintenance page.
 
 ### System Design Choices
-- **Database**: PostgreSQL managed by Replit, utilizing Drizzle ORM for schema management (users, projects, votes, comments, contact submissions, CMS content, settings).
-- **Development & Production**: Configured for seamless development on port 5000 with Vite integration and production deployment targeting Autoscale with optimized builds.
-- **Performance**: Optimized for Core Web Vitals, especially Largest Contentful Paint (LCP), through lazy loading, prioritized image fetching, async font loading, server compression, and Vite build optimizations (chunk splitting, minification).
-- **Language**: Primarily Serbian for all UI and content.
+- **Database**: PostgreSQL managed by Replit, utilizing Drizzle ORM for schema management across various entities (users, projects, votes, comments, CMS content, settings, newsletter subscribers).
+- **Performance**: Optimized for Core Web Vitals (especially LCP) through lazy loading, prioritized image fetching, async font loading, server compression, and Vite build optimizations.
+- **Language**: All UI and content are primarily in Serbian.
+- **Security**: Implements case-insensitive email/username lookups, banned user authorization, and robust password hashing using Node.js scrypt.
 
 ## External Dependencies
 - **PostgreSQL**: Replit managed database for all persistent data.
-- **Resend**: Email service for user verification, password resets, and contact form notifications. 
-  - Production API key configured with verified custom domain (`mail.studioleflow.com`)
-  - From address: `no-reply@mail.studioleflow.com`
-  - Development mode fallback with debug endpoint for testing
-  - Fail-safe: production fails if RESEND_FROM_EMAIL is missing
-- **UploadThing**: File upload service specifically for MP3 files (max 16MB per file).
-
-## Contact Information
-- **Email**: info@studioleflow.com
-- **Phone**: +381 63 734 7023
-- **Instagram**: @studioleflow
-- **Location**: Beograd, Srbija
-
-## Recent Updates (2025-11-07)
-- **Newsletter Subscription System**: Complete newsletter system with double opt-in email confirmation:
-  - Database: `newsletter_subscribers` table with fields: id, email, status (pending/confirmed/unsubscribed), confirmationToken, confirmedAt, subscribedAt, unsubscribedAt
-  - Backend API: Five new endpoints:
-    * POST `/api/newsletter/subscribe` - validates email, generates 32-char hex token, sends confirmation email (public)
-    * GET `/api/newsletter/confirm/:token` - confirms email subscription via token link (public)
-    * POST `/api/newsletter/unsubscribe` - unsubscribes email from newsletter (public)
-    * GET `/api/newsletter/subscribers` - fetches all subscribers with status (admin only)
-    * GET `/api/newsletter/stats` - returns total, confirmed, and pending counts (admin only)
-  - Storage functions: createNewsletterSubscriber, getNewsletterSubscriberByEmail, getNewsletterSubscriberByToken, confirmNewsletterSubscription, unsubscribeNewsletter, getAllNewsletterSubscribers, getConfirmedNewsletterSubscribers, getNewsletterStats
-  - Frontend components:
-    * NewsletterForm component with two variants (default for homepage, footer for footer section)
-    * Newsletter confirmation page (`/newsletter/potvrda/:token`) with success/error states
-    * Homepage newsletter CTA section with gradient background and professional design
-    * Footer newsletter column (4-column grid layout on large screens)
-  - Admin panel: New "Newsletter" tab (7th tab) with statistics cards (total, confirmed, pending), subscriber list table with status badges, dates, individual email copy, and "Copy all confirmed emails" export button
-  - Email integration: Branded confirmation emails via Resend with Studio LeFlow branding (#4542f5 accent color)
-  - Security: Case-insensitive email lookups, duplicate email prevention, re-subscription support for previously unsubscribed users
-- **2FA Admin Login During Maintenance**: Implemented Two-Factor Authentication for admin login during maintenance mode:
-  - Database: Added `adminLoginToken` and `adminLoginExpiry` fields to users table (15-minute expiration)
-  - Backend API: Two new endpoints:
-    * POST `/api/admin-login-request` - validates credentials, generates 6-digit code, sends email
-    * POST `/api/admin-login-verify` - verifies code and logs in admin user
-  - Frontend: Two-step dialog flow (credentials → verification code) with InputOTP component
-  - Security: User enumeration prevention - all failed attempts return identical 401 status with generic message
-  - Audit logging: Server-side detailed failure logs (user not found, invalid password, non-admin role, banned status)
-  - Email template: Branded admin login verification email with security warning
-  - Whitelisted in maintenance middleware for access during maintenance mode
-- **Maintenance Mode Admin Login Fix**: Fixed critical bug where admins couldn't login during maintenance mode - removed `/api` prefix from allowedPaths since middleware is mounted on `/api` (Express strips the prefix from `req.path`)
-- **Maintenance Mode Logo Fix**: Copied logo file from client assets to `attached_assets/logo/studioleflow-transparent.png` to ensure logo displays correctly on maintenance page
-
-## Previous Updates (2025-11-06)
-- **Email System**: Migrated to production Resend with verified domain, development fallback implemented
-- **Page Transitions**: Enhanced with smooth scale + fade animations (0.4s duration, professional easing curve)
-- **Code Quality**: Removed bcryptjs dependency, using Node.js scrypt for password hashing
-- **CMS Image Editing**: Implemented EditableImage component for inline image uploads in admin mode
-- **Favicon**: Added Studio LeFlow logo as site favicon (32x32) and Apple touch icon (180x180)
-- **Terminology Update**: Changed all instances of "sesija" to "termin" throughout the application
-- **PostCSS Build Warning**: Documented known benign warning from Tailwind CSS 3.x + PostCSS 8.4+ ("did not pass `from` option"). Warning is cosmetic only - CSS compiles correctly (77.94 kB). Custom Vite logger configured to attempt suppression. No functional impact, production-safe
-- **SEO Enhancement**: Added "leflow" as standalone keyword in SEO meta tags (SEO.tsx and home.tsx)
-- **Verification Modal Fix**: Fixed email verification flow - modal now appears immediately after registration (no redirection), removed auto-login from registration, user is logged in only after successful email verification
-- **Deployment Configuration**: .gitignore created, build optimizations verified, deployment target set to Autoscale
-- **Ready for Production**: All systems tested and verified, production build successful (20.53s), verification modal working on all devices
-- **Replit Environment Setup**: GitHub import successfully configured - database migrated, workflow set up on port 5000, dependencies installed, server running in development mode
-- **Contact Information Update**: Updated all contact information across site - email changed to info@studioleflow.com, phone +381 63 734 7023, Instagram @studioleflow added, working hours section removed from footer
-- **CSP Headers**: Added frame-src directive for YouTube iframe support (youtube.com and youtube-nocookie.com) to enable video embeds on Projekti page
-- **Scroll Indicator**: Implemented minimalist animated scroll indicator on homepage hero section - chevron icon with smooth bounce animation, auto-hides on scroll, smooth scroll to services section on click
-- **Banned User Authorization**: Added banned status checks to all authenticated middleware (`requireAdmin`, `requireVerifiedEmail`) - banned users are now completely blocked from all actions (voting, comments, uploads, admin panel)
-- **Case-Insensitive Email/Username**: 
-  - Implemented case-insensitive lookup in `getUserByEmail` and `getUserByUsername` using SQL `LOWER()`
-  - Added lowercase normalization in registration and update-profile routes
-  - Database audit confirmed no duplicate accounts (0 duplicates by email, 0 by username)
-  - Users can now login with any case variation of their email/username (e.g., User@Email.com, user@email.com)
-- **YouTube Age-Restricted Warning**: Added warning in admin panel when adding YouTube videos - age-restricted videos (18+) cannot be embedded via iframe and will not display correctly
-- **Open Graph Social Media Preview**: Configured Open Graph meta tags with Studio LeFlow logo for Instagram/Facebook/Twitter link previews. Added `/public` static folder served at `/public/og-image.jpg`. Absolute URLs generated for proper social media crawling. Image dimensions: 1200x630px (optimal for all platforms).
-- **Forgot Password System**: Complete password reset flow with 6-digit email verification codes:
-  - Added `passwordResetToken` and `passwordResetExpiry` fields to users table (15-minute expiration)
-  - Backend routes: `/api/forgot-password` (request reset) and `/api/reset-password` (confirm new password)
-  - Integrated into auth-page.tsx with smooth UI flow (forgot-password → reset-password → reset-success views)
-  - Security: Prevents user enumeration attacks - generic responses never reveal if email exists
-  - Email template matches verification email design (#7c3aed brand color)
-  - Reset form email field is read-only to prevent accidental edits
-  - Minimum password length: 8 characters
-- **Maintenance Mode**: Site-wide maintenance control system for admins:
-  - Backend: `getMaintenanceMode()` and `setMaintenanceMode()` functions in storage.ts
-  - Database: Uses existing settings table with key-value storage (`maintenance_mode` key)
-  - API routes: GET `/api/maintenance` (public - anyone can check status), POST `/api/maintenance` (admin only - toggle mode)
-  - Middleware: `checkMaintenanceMode` applied to `/api` routes only - blocks API calls for non-admin users when active (allows static files to load)
-  - Allowed API paths during maintenance: `/maintenance`, `/login`, `/logout`, `/user`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`, `/admin` (note: paths without `/api` prefix as middleware is mounted on `/api`)
-  - Admin Panel: New "Podešavanja" tab with toggle switch and warning banner when maintenance is active
-  - Frontend: App.tsx checks maintenance status via API and displays maintenance page for all non-admin users
-  - Maintenance Page: Clean design with LeFlow logo (inverted for dark mode visibility), "Sajt je u pripremi" message, contact information (email, phone, Instagram), and "Admin Prijava" button
-  - Admin Login Dialog: Embedded modal on maintenance page with username/password fields (no registration), toast notifications for success/error, form reset after successful login
-  - Admin Login Flow: Non-admin users see maintenance page → click "Admin Prijava" button → modal opens → enter credentials → login → full site access as admin
-  - Admin bypass: Admins can access entire site and all functionality even when maintenance mode is active
+- **Resend**: Email service for user verification, password resets, contact form notifications, and newsletter confirmations.
+- **UploadThing**: File upload service for MP3 files (max 16MB per file).
