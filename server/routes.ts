@@ -150,16 +150,17 @@ function requireVerifiedEmail(req: any, res: any, next: any) {
 // Middleware to check if site is in maintenance mode (for API routes only)
 async function checkMaintenanceMode(req: any, res: any, next: any) {
   // Allow access to maintenance check, auth routes, and admin routes
+  // NOTE: Paths do NOT include /api prefix because middleware is mounted on /api
   const allowedPaths = [
-    '/api/maintenance',
-    '/api/login',
-    '/api/logout',
-    '/api/user',
-    '/api/register',
-    '/api/verify-email',
-    '/api/forgot-password',
-    '/api/reset-password',
-    '/api/admin',
+    '/maintenance',
+    '/login',
+    '/logout',
+    '/user',
+    '/register',
+    '/verify-email',
+    '/forgot-password',
+    '/reset-password',
+    '/admin',
   ];
   
   // Check if the request is for an allowed path
