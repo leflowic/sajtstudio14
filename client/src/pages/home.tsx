@@ -137,10 +137,10 @@ export default function Home() {
             src="/equipment/hero-studio-background.jpg" 
             alt="Studio LeFlow - Profesionalni muzički studio"
             priority={true}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover scale-105 [filter:blur(6px)]"
           />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/45 to-black/65" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-6 py-20 text-center">
           <motion.div 
