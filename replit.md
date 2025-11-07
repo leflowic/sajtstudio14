@@ -39,6 +39,16 @@ The website features a modern, responsive design using Tailwind CSS and shadcn/u
 - **UploadThing**: File upload service for MP3 files (max 16MB per file).
 
 ## Recent Updates (2025-11-07)
+- **Google Search SEO & Favicon Optimization**: Comprehensive SEO improvements for better Google Search visibility:
+  - Generated multi-size favicon system (16x16, 32x32, 48x48, 192x192, 512x512, 180x180 Apple, .ico) using Sharp library
+  - Created scripts/generate-favicons.ts for reproducible favicon generation from LeFlow logo
+  - Updated index.html with complete favicon link tags for all devices and Google Search requirements
+  - Implemented bidirectional search keywords: "studio leflow" AND "leflow studio" across all pages (home, contact, projects, team, giveaway)
+  - Added alternateNames to structured data JSON-LD: ["LeFlow Studio", "LeFlow", "Studio LeFlow Beograd", "LeFlow Studio Beograd"]
+  - Optimized meta description to 157 characters (Google's recommended 155-160 range): "Vrhunski muzički studio u Beogradu. Snimanje, mix/mastering, instrumentali, video spotovi. WA-47, Apollo Twin X, UAD plugins. Preko 5 godina iskustva."
+  - Updated title to include both variations: "Studio LeFlow (LeFlow Studio) - Profesionalna Muzička Produkcija Beograd"
+  - Changed theme-color from #7c3aed to brand color #4542f5 for consistency
+  - Site now discoverable in Google Search via both "Studio LeFlow" and "LeFlow Studio" queries
 - **Content Protection System**: Implemented comprehensive image and logo protection across entire site:
   - Added three-layer protection to all images and logos: `draggable={false}`, `select-none` CSS class, and `onContextMenu` prevention
   - Blocks drag/drop, text selection, and right-click context menu (prevents "Open image in new tab")
