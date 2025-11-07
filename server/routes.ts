@@ -1,13 +1,14 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, type CmsContent, type CmsMedia, type VideoSpot } from "@shared/schema";
+import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertNewsletterSubscriberSchema, type CmsContent, type CmsMedia, type VideoSpot } from "@shared/schema";
 import { sendEmail, getLastVerificationCode } from "./resend-client";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 import { createRouteHandler } from "uploadthing/express";
 import { uploadRouter } from "./uploadthing";
 
@@ -565,6 +566,171 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const submissions = await storage.getAllContactSubmissions();
       res.json(submissions);
     } catch (error) {
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // ==================== NEWSLETTER API ROUTES ====================
+
+  // Subscribe to newsletter (public)
+  app.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const { email } = insertNewsletterSubscriberSchema.parse(req.body);
+
+      // Check if email already exists
+      const existingSubscriber = await storage.getNewsletterSubscriberByEmail(email);
+
+      if (existingSubscriber) {
+        if (existingSubscriber.status === 'confirmed') {
+          return res.status(400).json({ error: "Email je već prijavljen na newsletter" });
+        } else if (existingSubscriber.status === 'pending') {
+          return res.status(400).json({ error: "Email već postoji - proverite inbox za link za potvrdu" });
+        } else if (existingSubscriber.status === 'unsubscribed') {
+          // Resubscribe - generate new token
+          const confirmationToken = randomBytes(32).toString('hex');
+          
+          await storage.createNewsletterSubscriber(email, confirmationToken);
+          
+          // Send confirmation email
+          try {
+            const confirmUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/newsletter/potvrda/${confirmationToken}`;
+            
+            await sendEmail({
+              to: email,
+              subject: 'Potvrdite prijavu na Studio LeFlow newsletter',
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <div style="background-color: #4542f5; padding: 30px; text-align: center;">
+                    <h1 style="color: white; margin: 0;">Studio LeFlow</h1>
+                  </div>
+                  <div style="padding: 30px; background-color: #ffffff;">
+                    <h2 style="color: #333;">Potvrdite svoju email adresu</h2>
+                    <p>Hvala što ste se prijavili na Studio LeFlow newsletter!</p>
+                    <p>Kliknite na dugme ispod da potvrdite svoju email adresu:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="${confirmUrl}" style="background-color: #4542f5; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Potvrdi email</a>
+                    </div>
+                    <p style="color: #666; font-size: 14px;">Ili kopirajte i nalepite ovaj link u pretraživač:</p>
+                    <p style="color: #4542f5; word-break: break-all; font-size: 12px;">${confirmUrl}</p>
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #666; font-size: 12px;">Ako niste zatražili prijavu na newsletter, ignorišite ovaj email.</p>
+                  </div>
+                </div>
+              `
+            });
+          } catch (emailError) {
+            console.error("Greška pri slanju confirmation email-a:", emailError);
+            return res.status(500).json({ error: "Greška pri slanju email-a za potvrdu" });
+          }
+
+          return res.json({ message: "Uspešno! Proverite email za link za potvrdu" });
+        }
+      }
+
+      // Create new subscriber with confirmation token
+      const confirmationToken = randomBytes(32).toString('hex');
+      await storage.createNewsletterSubscriber(email, confirmationToken);
+
+      // Send confirmation email
+      try {
+        const confirmUrl = `${process.env.REPLIT_DEV_DOMAIN || 'http://localhost:5000'}/newsletter/potvrda/${confirmationToken}`;
+        
+        await sendEmail({
+          to: email,
+          subject: 'Potvrdite prijavu na Studio LeFlow newsletter',
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background-color: #4542f5; padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0;">Studio LeFlow</h1>
+              </div>
+              <div style="padding: 30px; background-color: #ffffff;">
+                <h2 style="color: #333;">Potvrdite svoju email adresu</h2>
+                <p>Hvala što ste se prijavili na Studio LeFlow newsletter!</p>
+                <p>Kliknite na dugme ispod da potvrdite svoju email adresu:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${confirmUrl}" style="background-color: #4542f5; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Potvrdi email</a>
+                </div>
+                <p style="color: #666; font-size: 14px;">Ili kopirajte i nalepite ovaj link u pretraživač:</p>
+                <p style="color: #4542f5; word-break: break-all; font-size: 12px;">${confirmUrl}</p>
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+                <p style="color: #666; font-size: 12px;">Ako niste zatražili prijavu na newsletter, ignorišite ovaj email.</p>
+              </div>
+            </div>
+          `
+        });
+      } catch (emailError) {
+        console.error("Greška pri slanju confirmation email-a:", emailError);
+        return res.status(500).json({ error: "Greška pri slanju email-a za potvrdu" });
+      }
+
+      res.json({ message: "Uspešno! Proverite email za link za potvrdu" });
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        res.status(400).json({ error: "Unesite validnu email adresu" });
+      } else {
+        console.error("Newsletter subscribe error:", error);
+        res.status(500).json({ error: "Greška na serveru" });
+      }
+    }
+  });
+
+  // Confirm newsletter subscription (public)
+  app.get("/api/newsletter/confirm/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const success = await storage.confirmNewsletterSubscription(token);
+
+      if (!success) {
+        return res.status(400).json({ error: "Link za potvrdu je nevažeći ili je već iskorišćen" });
+      }
+
+      res.json({ message: "Email uspešno potvrđen! Hvala što ste se prijavili na naš newsletter" });
+    } catch (error) {
+      console.error("Newsletter confirm error:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // Unsubscribe from newsletter (public)
+  app.post("/api/newsletter/unsubscribe", async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ error: "Email je obavezan" });
+      }
+
+      const success = await storage.unsubscribeNewsletter(email);
+
+      if (!success) {
+        return res.status(400).json({ error: "Email nije pronađen u listi pretplatnika" });
+      }
+
+      res.json({ message: "Uspešno ste se odjavili sa newslettera" });
+    } catch (error) {
+      console.error("Newsletter unsubscribe error:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // Get newsletter subscribers list (admin only)
+  app.get("/api/newsletter/subscribers", requireAdmin, async (_req, res) => {
+    try {
+      const subscribers = await storage.getAllNewsletterSubscribers();
+      res.json(subscribers);
+    } catch (error) {
+      console.error("Newsletter subscribers error:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // Get newsletter statistics (admin only)
+  app.get("/api/newsletter/stats", requireAdmin, async (_req, res) => {
+    try {
+      const stats = await storage.getNewsletterStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Newsletter stats error:", error);
       res.status(500).json({ error: "Greška na serveru" });
     }
   });
