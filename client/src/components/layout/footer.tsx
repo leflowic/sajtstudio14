@@ -39,7 +39,9 @@ export function Footer() {
                 <img 
                   src={leflowLogo} 
                   alt="Studio LeFlow Logo" 
-                  className="h-8 w-auto dark:invert transition-all"
+                  draggable={false}
+                  onContextMenu={(e) => e.preventDefault()}
+                  className="h-8 w-auto dark:invert transition-all select-none"
                 />
                 <span className="text-xl font-bold font-[Montserrat]">Studio LeFlow</span>
               </div>

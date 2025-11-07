@@ -60,7 +60,9 @@ export function Header() {
             <img 
               src={leflowLogo} 
               alt="Studio LeFlow Logo" 
-              className="h-10 w-auto dark:invert transition-all"
+              draggable={false}
+              onContextMenu={(e) => e.preventDefault()}
+              className="h-10 w-auto dark:invert transition-all select-none"
             />
             <span className="text-xl font-bold font-[Montserrat] uppercase">STUDIO LEFLOW</span>
           </Link>
