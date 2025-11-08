@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ArrowLeft, Send, Loader2, Check, CheckCheck, User } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ interface OtherUser {
   id: number;
   username: string;
   email: string;
+  avatarUrl: string | null;
 }
 
 interface ChatInterfaceProps {
@@ -200,9 +202,15 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <User className="w-5 h-5 text-primary" />
-          </div>
+          <Avatar className="w-10 h-10 flex-shrink-0">
+            {otherUser?.avatarUrl ? (
+              <AvatarImage src={otherUser.avatarUrl} alt={otherUser.username} />
+            ) : (
+              <AvatarFallback className="bg-primary/10">
+                <User className="w-5 h-5 text-primary" />
+              </AvatarFallback>
+            )}
+          </Avatar>
           <div className="flex-1">
             <h3 className="font-semibold">{otherUser?.username || "Učitavanje..."}</h3>
             {otherUserTyping && (
@@ -222,10 +230,29 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                 <div
                   key={message.id}
                   className={cn(
-                    "flex",
-                    isOwn ? "justify-end" : "justify-start"
+                    "flex gap-2 items-end",
+                    isOwn ? "justify-end flex-row-reverse" : "justify-start"
                   )}
                 >
+                  <Avatar className="w-8 h-8 flex-shrink-0">
+                    {isOwn ? (
+                      user?.avatarUrl ? (
+                        <AvatarImage src={user.avatarUrl} alt={user.username} />
+                      ) : (
+                        <AvatarFallback className="bg-primary/10 text-xs">
+                          <User className="w-4 h-4 text-primary" />
+                        </AvatarFallback>
+                      )
+                    ) : (
+                      otherUser?.avatarUrl ? (
+                        <AvatarImage src={otherUser.avatarUrl} alt={otherUser.username} />
+                      ) : (
+                        <AvatarFallback className="bg-primary/10 text-xs">
+                          <User className="w-4 h-4 text-primary" />
+                        </AvatarFallback>
+                      )
+                    )}
+                  </Avatar>
                   <div
                     className={cn(
                       "max-w-[70%] rounded-lg px-4 py-2 group relative",
