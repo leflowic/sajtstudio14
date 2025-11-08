@@ -797,8 +797,8 @@ function MessagesTab() {
                       <CardContent className="p-4">
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-xs text-muted-foreground">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <span className="font-medium text-sm text-foreground">
                                 {message.senderUsername}
                               </span>
                               <span className="text-xs text-muted-foreground">
