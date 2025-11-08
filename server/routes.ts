@@ -1670,6 +1670,15 @@ Sitemap: ${siteUrl}/sitemap.xml
       
       await storage.markMessagesAsRead(conversation.id, req.user!.id);
       
+      // Broadcast message_read event to the sender (otherUserId)
+      if (wsHelpers.broadcastToUser) {
+        wsHelpers.broadcastToUser(otherUserId, {
+          type: 'message_read',
+          conversationId: conversation.id,
+          readBy: req.user!.id,
+        });
+      }
+      
       res.json(messages);
     } catch (error: any) {
       console.error("[MESSAGING] Get messages error:", error);
