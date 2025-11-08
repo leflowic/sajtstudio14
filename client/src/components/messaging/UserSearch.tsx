@@ -44,7 +44,7 @@ export default function UserSearch({ onSelectUser }: UserSearchProps) {
     queryKey: ["/api/users/search", debouncedQuery],
     queryFn: async () => {
       if (debouncedQuery.length < 2) return [];
-      const res = await fetch(`/api/users/search?query=${encodeURIComponent(debouncedQuery)}`);
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(debouncedQuery)}`);
       if (!res.ok) throw new Error("Failed to search users");
       return res.json();
     },

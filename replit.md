@@ -40,3 +40,83 @@ The website features a modern, responsive design using Tailwind CSS and shadcn/u
 - **PostgreSQL**: Replit managed database for all persistent data.
 - **Resend**: Email service for user verification, password resets, contact form notifications, and newsletter confirmations.
 - **UploadThing**: File upload service for MP3 files (max 16MB per file).
+
+## Recent Updates (2025-11-08)
+
+### Real-Time Messaging System - IMPLEMENTATION COMPLETE
+Complete messaging infrastructure with real-time updates, admin oversight, and legal compliance.
+
+**Database Layer (Verified ✅):**
+- 4 tables: `conversations`, `messages`, `message_reads`, `admin_message_audit`
+- PostgreSQL trigger `enforce_canonical_conversation_users()` - automatically swaps user IDs to maintain canonical order (user1_id < user2_id), preventing duplicate conversations
+- 5 performance indexes for real-time queries
+- Trigger verified via SQL test: INSERT (25,24) → auto-corrected to (24,25)
+
+**Backend API (11 endpoints):**
+- User Messaging: GET /api/users/search, GET /api/conversations, GET /api/messages/conversation/:userId, POST /api/messages/send, PUT /api/messages/mark-read, GET /api/messages/unread-count, DELETE /api/messages/:id
+- Admin Oversight: GET /api/admin/messages/conversations, GET /api/admin/messages/conversation/:user1Id/:user2Id (auto-logs audit), DELETE /api/admin/messages/:id, GET /api/admin/messages/audit-logs
+- Middleware: `requireVerifiedEmail` on all messaging endpoints (only verified users can access)
+
+**WebSocket Server (path: /api/ws):**
+- Real-time message delivery (new_message events)
+- Typing indicators (typing_start/typing_stop with 5s auto-timeout)
+- Online/offline status tracking (Map<userId, Set<WebSocket>>)
+- Message read receipts (message_read events broadcast)
+- Multi-device support (Set<WebSocket> per user)
+- Authentication via initial 'auth' message with userId
+
+**Frontend Components:**
+- `/inbox` page - Split responsive layout (conversation list left, chat interface right)
+- `UserSearch` component - Debounced search (300ms) with autocomplete dropdown
+- `ConversationList` component - Real-time updates, unread badges, last message preview (50 chars), formatted timestamps
+- `ChatInterface` component - Message bubbles (own/other styling), typing indicator, read receipts (✓ unread, ✓✓ read), auto-scroll, textarea with Enter-to-send
+- `useWebSocket` hook - WebSocket client with auto-reconnect (3s timeout), subscribe pattern for message listeners
+
+**Admin Panel - "Poruke" Tab:**
+- Conversation list showing all user conversations with message counts
+- Message viewer displaying full conversation between any two users
+- Delete message functionality with AlertDialog confirmation
+- Audit log section tracking all admin conversation views (timestamp, admin username, viewed users)
+- Auto-logging when admin opens conversation viewer (compliance tracking)
+
+**Notification Badge:**
+- Header MessageCircle icon with destructive badge showing unread count
+- Real-time updates via WebSocket (invalidates query on new_message/message_read)
+- Displays "9+" for counts > 9
+- Only visible for email-verified users
+- Refetches every 30 seconds + WebSocket instant updates
+
+**Legal Compliance:**
+- Mandatory Terms of Service checkbox on registration: "Prihvatam uslove korišćenja. Administrator može pristupiti privatnim porukama u svrhu bezbednosti."
+- Privacy notice on login and registration: "Napomena: Privatne poruke mogu biti regulisane od strane administratora u svrhu bezbednosti i moderacije."
+- Frontend validation (React Hook Form + Zod) + backend validation (insertUserSchema) requiring termsAccepted = true
+- Alert component with AlertTriangle icon for visibility on auth pages
+
+**Security Features:**
+- requireVerifiedEmail middleware blocks unverified users (403 Forbidden)
+- Users can only delete their own messages
+- Admin audit logging for compliance (tracks all conversation views)
+- Canonical conversation ordering prevents duplicate (A,B)/(B,A) conversations
+- Banned user checks on message sending
+- SQL injection protection via Drizzle ORM parameterized queries
+
+**Verification Evidence:**
+- Database schema confirmed via SQL query (all 4 tables exist)
+- PostgreSQL trigger tested and working (canonical ordering verified)
+- Authentication tested (registration + login successful)
+- Authorization middleware tested (403 for unverified users, 200 for verified)
+- GET /api/conversations tested (200 OK, returns empty array)
+- WebSocket connection tested (successful connection to /api/ws)
+
+**Testing Status:**
+- ✅ Database layer verified (tables, trigger, indexes)
+- ✅ Authentication & authorization verified
+- ✅ Basic API endpoints verified (conversations, user search validation)
+- ✅ WebSocket connection verified
+- ⚠️ Full end-to-end messaging flow requires manual browser testing (send/receive messages, typing indicators, read receipts, file uploads)
+- ⚠️ Admin panel messaging features require manual browser testing
+
+**Files Modified:**
+- Backend: `shared/schema.ts` (4 new tables, insertUserSchema update), `server/seed.ts` (trigger creation), `server/storage.ts` (14 messaging methods), `server/routes.ts` (11 API endpoints + requireVerifiedEmail middleware), `server/index.ts` (WebSocket server on /api/ws)
+- Frontend: `client/src/pages/inbox.tsx`, `client/src/components/messaging/` (UserSearch.tsx, ConversationList.tsx, ChatInterface.tsx), `client/src/hooks/use-websocket.ts`, `client/src/pages/admin.tsx` (Poruke tab), `client/src/components/layout/header.tsx` (notification badge)
+- Auth: `client/src/pages/auth-page.tsx` (Terms checkbox + privacy notices)
