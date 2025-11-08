@@ -141,7 +141,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
     });
 
     return unsubscribe;
-  }, [subscribe, selectedUserId, queryClient, scrollToBottom]);
+  }, [subscribe, selectedUserId, queryClient, scrollToBottom, markAsReadMutation]);
 
   const handleTyping = useCallback(() => {
     if (!isTyping) {
