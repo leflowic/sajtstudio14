@@ -120,3 +120,38 @@ Complete messaging infrastructure with real-time updates, admin oversight, and l
 - Backend: `shared/schema.ts` (4 new tables, insertUserSchema update), `server/seed.ts` (trigger creation), `server/storage.ts` (14 messaging methods), `server/routes.ts` (11 API endpoints + requireVerifiedEmail middleware), `server/index.ts` (WebSocket server on /api/ws)
 - Frontend: `client/src/pages/inbox.tsx`, `client/src/components/messaging/` (UserSearch.tsx, ConversationList.tsx, ChatInterface.tsx), `client/src/hooks/use-websocket.ts`, `client/src/pages/admin.tsx` (Poruke tab), `client/src/components/layout/header.tsx` (notification badge)
 - Auth: `client/src/pages/auth-page.tsx` (Terms checkbox + privacy notices)
+
+### User Profile Pictures & Avatar System
+Complete user avatar management with upload, deletion, and dynamic initials display.
+
+**Backend Features:**
+- PUT /api/user/avatar - Update user avatar URL (UploadThing integration)
+- DELETE /api/user/avatar - Remove avatar by setting to null
+- Security: `sanitizeUser()` helper strips sensitive fields (password, tokens) from all API responses
+- Storage: `updateUserAvatar()` supports null values for avatar removal
+
+**Frontend Components:**
+- **AvatarWithInitials** (`client/src/components/ui/avatar-with-initials.tsx`):
+  - Displays user profile pictures via `<Avatar>` component
+  - Auto-generates initials from username (first 2 chars or first char of first+second word)
+  - 8 deterministic color backgrounds based on userID (consistent per user)
+  - Automatic fallback: image → initials → default avatar
+  - TypeScript strict typing with proper props
+- **Settings Page** (`client/src/pages/settings.tsx`):
+  - UploadThing integration for image upload (16MB max)
+  - "Ukloni sliku" (Remove Avatar) button with AlertDialog confirmation
+  - Loading states for upload and delete operations
+  - Toast notifications for success/error feedback
+  - Cache invalidation via TanStack Query after mutations
+
+**Usage Locations:**
+- Header navigation (user menu dropdown)
+- Chat interface (message bubbles)
+- Conversation list (sender preview)
+- Settings page (profile management)
+
+**Security Measures:**
+- All user-returning endpoints sanitize response data
+- No password/token exposure in API responses
+- Authenticated endpoints only (requireAuth middleware)
+- File size limits enforced (16MB max for avatars)

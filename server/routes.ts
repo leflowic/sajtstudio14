@@ -51,7 +51,7 @@ function escapeHtml(text: string): string {
 }
 
 // Sanitize user object by removing sensitive fields
-function sanitizeUser(user: any) {
+function sanitizeUser<T extends Record<string, any>>(user: T): Omit<T, 'password' | 'verificationCode' | 'passwordResetToken' | 'passwordResetExpiry' | 'adminLoginToken' | 'adminLoginExpiry'> {
   const {
     password,
     verificationCode,
