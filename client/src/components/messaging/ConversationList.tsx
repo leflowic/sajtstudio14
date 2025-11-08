@@ -15,7 +15,13 @@ interface ConversationData {
   id: number;
   otherUserId: number;
   otherUsername: string;
-  lastMessage: string | null;
+  lastMessage: {
+    id: number;
+    content: string;
+    senderId: number;
+    receiverId: number;
+    deleted: boolean;
+  } | null;
   lastMessageAt: string;
   unreadCount: number;
   deleted: boolean;
@@ -47,7 +53,8 @@ function formatTimestamp(dateString: string): string {
 
 export default function ConversationList({ selectedUserId, onSelectConversation }: ConversationListProps) {
   const { user } = useAuth();
-  const { subscribe } = useWebSocketContext();
+  // WebSocket temporarily disabled for debugging
+  // const { subscribe } = useWebSocketContext();
 
   const { data: conversations, isLoading, refetch, error } = useQuery<ConversationData[]>({
     queryKey: ["/api/conversations"],
@@ -65,18 +72,19 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
 
   console.log('[ConversationList] Render - conversations:', conversations, 'isLoading:', isLoading, 'error:', error);
 
-  useEffect(() => {
-    const unsubscribe = subscribe((message) => {
-      if (message.type === "new_message") {
-        refetch();
-      }
-      if (message.type === "message_read") {
-        refetch();
-      }
-    });
+  // WebSocket listeners temporarily disabled
+  // useEffect(() => {
+  //   const unsubscribe = subscribe((message) => {
+  //     if (message.type === "new_message") {
+  //       refetch();
+  //     }
+  //     if (message.type === "message_read") {
+  //       refetch();
+  //     }
+  //   });
 
-    return unsubscribe;
-  }, [subscribe, refetch]);
+  //   return unsubscribe;
+  // }, [subscribe, refetch]);
 
   const truncateMessage = (text: string | null, maxLength: number = 50): string => {
     if (!text) return "";
@@ -129,10 +137,10 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
                       "text-sm truncate",
                       conversation.unreadCount > 0 ? "font-medium text-foreground" : "text-muted-foreground"
                     )}>
-                      {conversation.deleted ? (
+                      {conversation.lastMessage?.deleted ? (
                         <span className="italic text-muted-foreground">Poruka obrisana</span>
-                      ) : conversation.lastMessage ? (
-                        truncateMessage(conversation.lastMessage)
+                      ) : conversation.lastMessage?.content ? (
+                        truncateMessage(conversation.lastMessage.content)
                       ) : (
                         <span className="italic">Započni konverzaciju</span>
                       )}

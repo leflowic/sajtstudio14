@@ -34,7 +34,8 @@ interface ChatInterfaceProps {
 
 export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceProps) {
   const { user } = useAuth();
-  const { send, subscribe } = useWebSocketContext();
+  // WebSocket temporarily disabled for debugging
+  // const { send, subscribe } = useWebSocketContext();
   const queryClient = useQueryClient();
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -115,62 +116,65 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
     }
   }, [messages, user?.id, markAsReadMutation.isPending]);
 
-  useEffect(() => {
-    const unsubscribe = subscribe((message) => {
-      if (message.type === "new_message") {
-        queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
-        queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
-        scrollToBottom();
-        
-        if (message.message.senderId === selectedUserId) {
-          markAsReadMutation.mutate();
-        }
-      }
-      
-      if (message.type === "typing_start" && message.userId === selectedUserId) {
-        setOtherUserTyping(true);
-      }
-      
-      if (message.type === "typing_stop" && message.userId === selectedUserId) {
-        setOtherUserTyping(false);
-      }
-      
-      if (message.type === "message_read") {
-        queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
-      }
-    });
+  // WebSocket message listeners temporarily disabled
+  // useEffect(() => {
+  //   const unsubscribe = subscribe((message) => {
+  //     if (message.type === "new_message") {
+  //       queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
+  //       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+  //       scrollToBottom();
+  //       
+  //       if (message.message.senderId === selectedUserId) {
+  //         markAsReadMutation.mutate();
+  //       }
+  //     }
+  //     
+  //     if (message.type === "typing_start" && message.userId === selectedUserId) {
+  //       setOtherUserTyping(true);
+  //     }
+  //     
+  //     if (message.type === "typing_stop" && message.userId === selectedUserId) {
+  //       setOtherUserTyping(false);
+  //     }
+  //     
+  //     if (message.type === "message_read") {
+  //       queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
+  //     }
+  //   });
 
-    return unsubscribe;
-  }, [subscribe, selectedUserId, queryClient, scrollToBottom]);
+  //   return unsubscribe;
+  // }, [subscribe, selectedUserId, queryClient, scrollToBottom]);
 
+  // Typing indicator temporarily disabled (no WebSocket)
   const handleTyping = useCallback(() => {
-    if (!isTyping) {
-      setIsTyping(true);
-      send({ type: "typing_start", receiverId: selectedUserId });
-    }
+    // if (!isTyping) {
+    //   setIsTyping(true);
+    //   send({ type: "typing_start", receiverId: selectedUserId });
+    // }
 
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current);
-    }
+    // if (typingTimeoutRef.current) {
+    //   clearTimeout(typingTimeoutRef.current);
+    // }
 
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false);
-      send({ type: "typing_stop", receiverId: selectedUserId });
-    }, 500);
-  }, [isTyping, send, selectedUserId]);
+    // typingTimeoutRef.current = setTimeout(() => {
+    //   setIsTyping(false);
+    //   send({ type: "typing_stop", receiverId: selectedUserId });
+    // }, 500);
+  }, [isTyping, selectedUserId]);
 
   const handleSendMessage = () => {
     if (!messageText.trim()) return;
     
     sendMessageMutation.mutate(messageText.trim());
     
-    if (isTyping) {
-      setIsTyping(false);
-      send({ type: "typing_stop", receiverId: selectedUserId });
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    }
+    // WebSocket typing stop temporarily disabled
+    // if (isTyping) {
+    //   setIsTyping(false);
+    //   send({ type: "typing_stop", receiverId: selectedUserId });
+    //   if (typingTimeoutRef.current) {
+    //     clearTimeout(typingTimeoutRef.current);
+    //   }
+    // }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
