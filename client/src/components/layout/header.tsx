@@ -98,10 +98,10 @@ export function Header() {
 
           <nav className="hidden xl:flex items-center gap-0.5">
             {navigation.map((item) => (
-              <motion.div key={item.name} whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
+              <motion.div key={item.name} whileHover={{ y: -2 }} transition={{ duration: 0.2 }} className="flex items-center">
                 <Link 
                   href={item.href}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate flex items-center min-h-9 ${
                     isActive(item.href)
                       ? "text-primary"
                       : "text-foreground"
@@ -114,23 +114,25 @@ export function Header() {
             ))}
             {user?.role === 'admin' && (
               <>
-                <Link 
-                  href="/admin"
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate ${
-                    isActive("/admin")
-                      ? "text-primary"
-                      : "text-foreground"
-                  }`}
-                  data-testid="link-nav-admin"
-                >
-                  Admin
-                </Link>
+                <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }} className="flex items-center">
+                  <Link 
+                    href="/admin"
+                    className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate flex items-center min-h-9 ${
+                      isActive("/admin")
+                        ? "text-primary"
+                        : "text-foreground"
+                    }`}
+                    data-testid="link-nav-admin"
+                  >
+                    Admin
+                  </Link>
+                </motion.div>
                 {!isActive("/admin") && (
                   <Button
                     variant={isEditMode ? "default" : "outline"}
                     size="sm"
                     onClick={toggleEditMode}
-                    className="gap-2"
+                    className="gap-2 min-h-9"
                     data-testid="button-edit-site"
                   >
                     {isEditMode ? (
@@ -148,13 +150,15 @@ export function Header() {
                 )}
               </>
             )}
-            <button
-              onClick={scrollToServices}
-              className="px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate text-foreground"
-              data-testid="link-nav-usluge"
-            >
-              Usluge
-            </button>
+            <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }} className="flex items-center">
+              <button
+                onClick={scrollToServices}
+                className="px-3 py-2 rounded-lg text-sm font-medium transition-colors hover-elevate text-foreground flex items-center min-h-9"
+                data-testid="link-nav-usluge"
+              >
+                Usluge
+              </button>
+            </motion.div>
           </nav>
 
           <div className="hidden xl:flex items-center gap-2">
@@ -162,7 +166,7 @@ export function Header() {
             {user ? (
               <>
                 {user.emailVerified && (
-                  <Button variant="ghost" size="icon" asChild className="relative">
+                  <Button variant="ghost" size="icon" asChild className="relative h-9 w-9">
                     <Link href="/inbox">
                       <MessageCircle className="h-5 w-5" />
                       {unreadCount > 0 && (
@@ -177,7 +181,7 @@ export function Header() {
                     </Link>
                   </Button>
                 )}
-                <Link href="/settings" className="hover-elevate rounded-full">
+                <Link href="/settings" className="hover-elevate rounded-full flex items-center">
                   <Avatar className="h-9 w-9">
                     {user.avatarUrl ? (
                       <AvatarImage src={user.avatarUrl} alt={user.username} />
@@ -194,6 +198,7 @@ export function Header() {
                   size="icon"
                   onClick={handleLogout}
                   disabled={logoutMutation.isPending}
+                  className="h-9 w-9"
                 >
                   <LogOut className="h-5 w-5" />
                   <span className="sr-only">Odjavi se</span>
@@ -201,13 +206,13 @@ export function Header() {
               </>
             ) : (
               <Link href="/prijava">
-                <Button variant="outline">
+                <Button variant="outline" className="h-9">
                   Prijava
                 </Button>
               </Link>
             )}
             <Link href="/kontakt">
-              <Button data-testid="button-header-contact">
+              <Button data-testid="button-header-contact" className="h-9">
                 Zakažite Termin
               </Button>
             </Link>
