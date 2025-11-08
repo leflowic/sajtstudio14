@@ -4,8 +4,8 @@ import { useWebSocketContext } from "@/contexts/WebSocketContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { User, Loader2 } from "lucide-react";
+import { AvatarWithInitials } from "@/components/ui/avatar-with-initials";
+import { Loader2 } from "lucide-react";
 import { formatDistanceToNow, isToday, isYesterday, format } from "date-fns";
 import { sr } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -66,7 +66,6 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
       if (!res.ok) throw new Error("Failed to fetch conversations");
       return res.json();
     },
-    refetchInterval: 30000,
   });
 
   useEffect(() => {
@@ -116,15 +115,13 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
                   selectedUserId === conversation.otherUser.id && "bg-muted"
                 )}
               >
-                <Avatar className="w-10 h-10 flex-shrink-0">
-                  {conversation.otherUser.avatarUrl ? (
-                    <AvatarImage src={conversation.otherUser.avatarUrl} alt={conversation.otherUser.username} />
-                  ) : (
-                    <AvatarFallback className="bg-primary/10">
-                      <User className="w-5 h-5 text-primary" />
-                    </AvatarFallback>
-                  )}
-                </Avatar>
+                <AvatarWithInitials
+                  src={conversation.otherUser.avatarUrl}
+                  alt={conversation.otherUser.username}
+                  name={conversation.otherUser.username}
+                  userId={conversation.otherUser.id}
+                  className="w-10 h-10 flex-shrink-0"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <p className="font-semibold text-sm truncate">
@@ -159,7 +156,6 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
           </div>
         ) : (
           <div className="p-8 text-center text-muted-foreground">
-            <User className="w-12 h-12 mx-auto mb-2 opacity-50" />
             <p className="text-sm">Nema aktivnih konverzacija</p>
             <p className="text-xs mt-1">Pretražite korisnike da započnete chat</p>
           </div>

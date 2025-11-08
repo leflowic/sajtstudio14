@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { ArrowLeft, Send, Loader2, Check, CheckCheck, User } from "lucide-react";
+import { AvatarWithInitials } from "@/components/ui/avatar-with-initials";
+import { ArrowLeft, Send, Loader2, Check, CheckCheck } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +44,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastUnreadMessagesRef = useRef<Set<number>>(new Set());
 
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages/conversation", selectedUserId],
@@ -52,7 +53,6 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
-    refetchInterval: 10000,
   });
 
   const { data: otherUser } = useQuery<OtherUser>({
@@ -109,13 +109,27 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    if (messages && messages.length > 0 && !markAsReadMutation.isPending) {
-      const hasUnreadMessages = messages.some(msg => !msg.isRead && msg.receiverId === user?.id);
-      if (hasUnreadMessages) {
-        markAsReadMutation.mutate();
-      }
+    if (!messages || messages.length === 0 || !user?.id || markAsReadMutation.isPending) return;
+
+    const currentUnreadMessageIds = messages
+      .filter(msg => !msg.isRead && msg.receiverId === user.id)
+      .map(msg => msg.id);
+    
+    if (currentUnreadMessageIds.length === 0) {
+      lastUnreadMessagesRef.current = new Set();
+      return;
     }
-  }, [messages, user?.id, markAsReadMutation.isPending]);
+
+    const hasNewUnreadMessages = currentUnreadMessageIds.some(
+      id => !lastUnreadMessagesRef.current.has(id)
+    );
+
+    if (hasNewUnreadMessages) {
+      const newUnreadSet = new Set(currentUnreadMessageIds);
+      lastUnreadMessagesRef.current = newUnreadSet;
+      markAsReadMutation.mutate();
+    }
+  }, [messages, user?.id, markAsReadMutation.mutate, markAsReadMutation.isPending]);
 
   useEffect(() => {
     const unsubscribe = subscribe((message) => {
@@ -123,10 +137,6 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
         queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
         queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
         scrollToBottom();
-        
-        if (message.message.senderId === selectedUserId) {
-          markAsReadMutation.mutate();
-        }
       }
       
       if (message.type === "typing_start" && message.userId === selectedUserId) {
@@ -143,7 +153,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
     });
 
     return unsubscribe;
-  }, [subscribe, selectedUserId, queryClient, scrollToBottom, markAsReadMutation]);
+  }, [subscribe, selectedUserId, queryClient, scrollToBottom]);
 
   const handleTyping = useCallback(() => {
     if (!isTyping) {
@@ -202,15 +212,13 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>
-          <Avatar className="w-10 h-10 flex-shrink-0">
-            {otherUser?.avatarUrl ? (
-              <AvatarImage src={otherUser.avatarUrl} alt={otherUser.username} />
-            ) : (
-              <AvatarFallback className="bg-primary/10">
-                <User className="w-5 h-5 text-primary" />
-              </AvatarFallback>
-            )}
-          </Avatar>
+          <AvatarWithInitials
+            src={otherUser?.avatarUrl}
+            alt={otherUser?.username || "User"}
+            name={otherUser?.username || "User"}
+            userId={selectedUserId}
+            className="w-10 h-10 flex-shrink-0"
+          />
           <div className="flex-1">
             <h3 className="font-semibold">{otherUser?.username || "Učitavanje..."}</h3>
             {otherUserTyping && (
@@ -234,25 +242,13 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                     isOwn ? "justify-end flex-row-reverse" : "justify-start"
                   )}
                 >
-                  <Avatar className="w-8 h-8 flex-shrink-0">
-                    {isOwn ? (
-                      user?.avatarUrl ? (
-                        <AvatarImage src={user.avatarUrl} alt={user.username} />
-                      ) : (
-                        <AvatarFallback className="bg-primary/10 text-xs">
-                          <User className="w-4 h-4 text-primary" />
-                        </AvatarFallback>
-                      )
-                    ) : (
-                      otherUser?.avatarUrl ? (
-                        <AvatarImage src={otherUser.avatarUrl} alt={otherUser.username} />
-                      ) : (
-                        <AvatarFallback className="bg-primary/10 text-xs">
-                          <User className="w-4 h-4 text-primary" />
-                        </AvatarFallback>
-                      )
-                    )}
-                  </Avatar>
+                  <AvatarWithInitials
+                    src={isOwn ? user?.avatarUrl : otherUser?.avatarUrl}
+                    alt={isOwn ? user?.username : otherUser?.username}
+                    name={isOwn ? user?.username || "User" : otherUser?.username || "User"}
+                    userId={isOwn ? user?.id : selectedUserId}
+                    className="w-8 h-8 flex-shrink-0"
+                  />
                   <div
                     className={cn(
                       "max-w-[70%] rounded-lg px-4 py-2 group relative",
