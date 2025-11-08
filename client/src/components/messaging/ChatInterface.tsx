@@ -46,7 +46,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ["/api/messages/conversation", selectedUserId],
     queryFn: async () => {
-      const res = await fetch(`/api/messages/conversation/${selectedUserId}`);
+      const res = await fetch(`/api/messages/conversation/${selectedUserId}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       return res.json();
     },
@@ -56,7 +56,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
   const { data: otherUser } = useQuery<OtherUser>({
     queryKey: ["/api/users", selectedUserId],
     queryFn: async () => {
-      const res = await fetch(`/api/users/${selectedUserId}`);
+      const res = await fetch(`/api/users/${selectedUserId}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch user");
       return res.json();
     },

@@ -52,7 +52,7 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
   const { data: conversations, isLoading, refetch } = useQuery<ConversationData[]>({
     queryKey: ["/api/conversations"],
     queryFn: async () => {
-      const res = await fetch("/api/conversations");
+      const res = await fetch("/api/conversations", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch conversations");
       return res.json();
     },
