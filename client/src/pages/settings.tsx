@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Lock, AlertCircle, Upload, Loader2, ImageIcon } from "lucide-react";
+import { User, Mail, Lock, AlertCircle, Upload, Loader2, ImageIcon, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function Settings() {
@@ -73,6 +73,26 @@ export default function Settings() {
     setIsUploadingAvatar(true);
     await startAvatarUpload([file]);
   };
+
+  const removeAvatarMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("DELETE", "/api/user/avatar");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      toast({
+        title: "Avatar uklonjen",
+        description: "Vaša profilna slika je uspešno uklonjena",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Greška",
+        description: error.message || "Greška pri uklanjanju avatara",
+        variant: "destructive",
+      });
+    },
+  });
 
   const updateProfileMutation = useMutation({
     mutationFn: async (data: { username?: string; email?: string }) => {
@@ -219,10 +239,10 @@ export default function Settings() {
                   <p className="text-sm text-muted-foreground">
                     Preporučena veličina: 400x400px. Max: 4MB
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       variant="outline"
-                      disabled={isUploadingAvatar}
+                      disabled={isUploadingAvatar || removeAvatarMutation.isPending}
                       onClick={() => {
                         const input = document.createElement('input');
                         input.type = 'file';
@@ -247,6 +267,26 @@ export default function Settings() {
                         </>
                       )}
                     </Button>
+                    {user?.avatarUrl && (
+                      <Button
+                        variant="outline"
+                        disabled={isUploadingAvatar || removeAvatarMutation.isPending}
+                        onClick={() => removeAvatarMutation.mutate()}
+                        data-testid="button-remove-avatar"
+                      >
+                        {removeAvatarMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Uklanjanje...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Ukloni sliku
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>

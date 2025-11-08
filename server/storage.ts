@@ -70,6 +70,9 @@ export interface IStorage {
   setAdminLoginToken(userId: number, token: string): Promise<void>;
   verifyAdminLoginToken(userId: number, token: string): Promise<boolean>;
   clearAdminLoginToken(userId: number): Promise<void>;
+  updateUserProfile(userId: number, data: { username?: string; email?: string }): Promise<void>;
+  updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
+  updateUserAvatar(userId: number, avatarUrl: string | null): Promise<void>;
 
   // Projects
   createProject(data: { title: string; description: string; genre: string; mp3Url: string; userId: number; currentMonth: string }): Promise<Project>;
@@ -333,7 +336,7 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
   }
 
-  async updateUserAvatar(userId: number, avatarUrl: string): Promise<void> {
+  async updateUserAvatar(userId: number, avatarUrl: string | null): Promise<void> {
     await db.update(users).set({ avatarUrl }).where(eq(users.id, userId));
   }
 

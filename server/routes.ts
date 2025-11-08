@@ -50,6 +50,20 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (m) => map[m] || m);
 }
 
+// Sanitize user object by removing sensitive fields
+function sanitizeUser(user: any) {
+  const {
+    password,
+    verificationCode,
+    passwordResetToken,
+    passwordResetExpiry,
+    adminLoginToken,
+    adminLoginExpiry,
+    ...sanitized
+  } = user;
+  return sanitized;
+}
+
 // Rate limiting za kontakt formu - čuva IP adrese i timestamps
 const contactRateLimits = new Map<string, number[]>();
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 sat u milisekundama
@@ -865,9 +879,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update profile
       await storage.updateUserProfile(userId, { username, email });
       
-      // Return updated user
+      // Return updated user (sanitized)
       const updatedUser = await storage.getUser(userId);
-      res.json(updatedUser);
+      res.json(sanitizeUser(updatedUser));
     } catch (error: any) {
       console.error("Update profile error:", error);
       res.status(500).json({ error: error.message || "Greška na serveru" });
@@ -929,11 +943,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update avatar
       await storage.updateUserAvatar(userId, avatarUrl);
       
-      // Return updated user
+      // Return updated user (sanitized)
       const updatedUser = await storage.getUser(userId);
-      res.json(updatedUser);
+      res.json(sanitizeUser(updatedUser));
     } catch (error: any) {
       console.error("Update avatar error:", error);
+      res.status(500).json({ error: error.message || "Greška na serveru" });
+    }
+  });
+
+  // Remove user avatar
+  app.delete("/api/user/avatar", async (req, res) => {
+    try {
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Neautorizovan pristup" });
+      }
+
+      // Remove avatar by setting it to null
+      await storage.updateUserAvatar(userId, null);
+      
+      // Return updated user (sanitized)
+      const updatedUser = await storage.getUser(userId);
+      res.json(sanitizeUser(updatedUser));
+    } catch (error: any) {
+      console.error("Remove avatar error:", error);
       res.status(500).json({ error: error.message || "Greška na serveru" });
     }
   });
