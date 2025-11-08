@@ -255,6 +255,7 @@ app.use((req, res, next) => {
             if (message.type === 'typing_start') {
               const { receiverId } = message;
               const conversationKey = getConversationKey(userId, receiverId);
+              const currentUserId = userId; // Capture for closure
               
               if (!typingUsers.has(conversationKey)) {
                 typingUsers.set(conversationKey, new Set());
@@ -269,10 +270,10 @@ app.use((req, res, next) => {
 
               // Auto-clear typing after 5 seconds
               setTimeout(() => {
-                typingUsers.get(conversationKey)?.delete(userId);
+                typingUsers.get(conversationKey)?.delete(currentUserId);
                 broadcastToUser(receiverId, {
                   type: 'typing_stop',
-                  userId,
+                  userId: currentUserId,
                 });
               }, 5000);
             }

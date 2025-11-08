@@ -11,6 +11,7 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useScrollToTop } from "@/hooks/use-scroll-to-top";
+import { HelmetProvider } from "react-helmet-async";
 import Home from "@/pages/home";
 import Terms from "@/pages/terms";
 import Team from "@/pages/team";
@@ -109,18 +110,20 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
-        <AuthProvider>
-          <EditModeProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </EditModeProvider>
-        </AuthProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <HelmetProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider>
+          <AuthProvider>
+            <EditModeProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </EditModeProvider>
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </HelmetProvider>
   );
 }
 
