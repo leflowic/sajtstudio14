@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { wsHelpers } from "./websocket-helpers";
 import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertNewsletterSubscriberSchema, type CmsContent, type CmsMedia, type VideoSpot } from "@shared/schema";
 import { sendEmail, getLastVerificationCode } from "./resend-client";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
@@ -1628,13 +1629,31 @@ Sitemap: ${siteUrl}/sitemap.xml
   // Mark messages as read
   app.put("/api/messages/mark-read", requireVerifiedEmail, async (req, res) => {
     try {
-      const { conversationId } = req.body;
+      const { otherUserId } = req.body;
       
-      if (!conversationId || typeof conversationId !== 'number') {
-        return res.status(400).json({ error: "conversationId je obavezan" });
+      if (!otherUserId || typeof otherUserId !== 'number') {
+        return res.status(400).json({ error: "otherUserId je obavezan" });
       }
       
-      await storage.markMessagesAsRead(conversationId, req.user!.id);
+      // Get or create conversation
+      const conversation = await storage.getConversation(req.user!.id, otherUserId);
+      
+      if (!conversation) {
+        return res.json({ success: true });
+      }
+      
+      // Mark messages as read
+      await storage.markMessagesAsRead(conversation.id, req.user!.id);
+      
+      // Broadcast read receipt to other user via WebSocket
+      if (wsHelpers.broadcastToUser) {
+        wsHelpers.broadcastToUser(otherUserId, {
+          type: 'message_read',
+          conversationId: conversation.id,
+          readBy: req.user!.id,
+        });
+      }
+      
       res.json({ success: true });
     } catch (error: any) {
       console.error("[MESSAGING] Mark as read error:", error);

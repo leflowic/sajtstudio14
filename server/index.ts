@@ -6,6 +6,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { seedCmsContent } from "./seed";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
+import { setBroadcastFunction } from "./websocket-helpers";
 
 const app = express();
 
@@ -139,6 +140,35 @@ app.use((req, res, next) => {
     await seedCmsContent();
     
     const server = await registerRoutes(app);
+    
+    // ===== WEBSOCKET SETUP (before routes need it) =====
+    // Track online users: Map<userId, Set<WebSocket>>
+    const onlineUsers = new Map<number, Set<WebSocket>>();
+    
+    // Track typing status: Map<conversationKey, Set<userId>>
+    const typingUsers = new Map<string, Set<number>>();
+    
+    // Helper function to broadcast message to specific user (all their active connections)
+    function broadcastToUser(userId: number, message: any) {
+      const userSockets = onlineUsers.get(userId);
+      if (userSockets) {
+        const messageStr = JSON.stringify(message);
+        userSockets.forEach(socket => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(messageStr);
+          }
+        });
+      }
+    }
+    
+    // Helper function to get conversation key (canonical ordering)
+    function getConversationKey(user1Id: number, user2Id: number): string {
+      const [id1, id2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+      return `${id1}-${id2}`;
+    }
+    
+    // Make broadcastToUser available to routes IMMEDIATELY
+    setBroadcastFunction(broadcastToUser);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;
@@ -186,12 +216,6 @@ app.use((req, res, next) => {
 
     // ===== WEBSOCKET SERVER FOR REAL-TIME MESSAGING =====
     const wss = new WebSocketServer({ server, path: '/api/ws' });
-    
-    // Track online users: Map<userId, Set<WebSocket>>
-    const onlineUsers = new Map<number, Set<WebSocket>>();
-    
-    // Track typing status: Map<conversationKey, Set<userId>>
-    const typingUsers = new Map<string, Set<number>>();
 
     wss.on('connection', async (ws: WebSocket, req) => {
       try {
@@ -346,25 +370,6 @@ app.use((req, res, next) => {
         ws.close(1011, 'Internal server error');
       }
     });
-
-    // Helper function to broadcast message to specific user (all their active connections)
-    function broadcastToUser(userId: number, message: any) {
-      const userSockets = onlineUsers.get(userId);
-      if (userSockets) {
-        const messageStr = JSON.stringify(message);
-        userSockets.forEach(socket => {
-          if (socket.readyState === WebSocket.OPEN) {
-            socket.send(messageStr);
-          }
-        });
-      }
-    }
-
-    // Helper function to get conversation key (canonical ordering)
-    function getConversationKey(user1Id: number, user2Id: number): string {
-      const [id1, id2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
-      return `${id1}-${id2}`;
-    }
 
     log('[WebSocket] WebSocket server initialized on /api/ws');
 

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -47,7 +47,7 @@ function formatTimestamp(dateString: string): string {
 
 export default function ConversationList({ selectedUserId, onSelectConversation }: ConversationListProps) {
   const { user } = useAuth();
-  const { subscribe } = useWebSocket();
+  const { subscribe } = useWebSocketContext();
 
   const { data: conversations, isLoading, refetch } = useQuery<ConversationData[]>({
     queryKey: ["/api/conversations"],

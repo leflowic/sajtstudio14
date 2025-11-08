@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket } from "@/hooks/use-websocket";
+import { useWebSocketContext } from "@/contexts/WebSocketContext";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -34,7 +34,7 @@ interface ChatInterfaceProps {
 
 export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceProps) {
   const { user } = useAuth();
-  const { send, subscribe } = useWebSocket();
+  const { send, subscribe } = useWebSocketContext();
   const queryClient = useQueryClient();
   const [messageText, setMessageText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -107,10 +107,13 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
   }, [messages, scrollToBottom]);
 
   useEffect(() => {
-    if (messages && messages.length > 0) {
-      markAsReadMutation.mutate();
+    if (messages && messages.length > 0 && !markAsReadMutation.isPending) {
+      const hasUnreadMessages = messages.some(msg => !msg.isRead && msg.receiverId === user?.id);
+      if (hasUnreadMessages) {
+        markAsReadMutation.mutate();
+      }
     }
-  }, [selectedUserId]);
+  }, [messages, user?.id, markAsReadMutation.isPending]);
 
   useEffect(() => {
     const unsubscribe = subscribe((message) => {

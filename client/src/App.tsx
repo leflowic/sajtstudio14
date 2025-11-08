@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "@/lib/protected-route";
 import { EditModeProvider } from "@/contexts/EditModeContext";
+import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -114,12 +115,14 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <AuthProvider>
-            <EditModeProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Router />
-              </TooltipProvider>
-            </EditModeProvider>
+            <WebSocketProvider>
+              <EditModeProvider>
+                <TooltipProvider>
+                  <Toaster />
+                  <Router />
+                </TooltipProvider>
+              </EditModeProvider>
+            </WebSocketProvider>
           </AuthProvider>
         </ThemeProvider>
       </QueryClientProvider>
