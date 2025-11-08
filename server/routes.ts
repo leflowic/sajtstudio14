@@ -912,6 +912,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user avatar
+  app.put("/api/user/avatar", async (req, res) => {
+    try {
+      const { avatarUrl } = req.body;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({ error: "Neautorizovan pristup" });
+      }
+
+      if (!avatarUrl || typeof avatarUrl !== 'string') {
+        return res.status(400).json({ error: "Avatar URL je obavezan" });
+      }
+
+      // Update avatar
+      await storage.updateUserAvatar(userId, avatarUrl);
+      
+      // Return updated user
+      const updatedUser = await storage.getUser(userId);
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Update avatar error:", error);
+      res.status(500).json({ error: error.message || "Greška na serveru" });
+    }
+  });
+
   // Get giveaway settings
   app.get("/api/giveaway/settings", async (_req, res) => {
     try {

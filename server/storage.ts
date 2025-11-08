@@ -333,6 +333,10 @@ export class DatabaseStorage implements IStorage {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
   }
 
+  async updateUserAvatar(userId: number, avatarUrl: string): Promise<void> {
+    await db.update(users).set({ avatarUrl }).where(eq(users.id, userId));
+  }
+
   // Projects
   async createProject(data: { title: string; description: string; genre: string; mp3Url: string; userId: number; currentMonth: string }): Promise<Project> {
     const [project] = await db.insert(projects).values(data).returning();

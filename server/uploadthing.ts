@@ -53,6 +53,32 @@ export const uploadRouter = {
         fileName: file.name
       };
     }),
+  
+  // Avatar image uploader - Only image files allowed
+  avatarUploader: f({ 
+    "image/png": { maxFileSize: "4MB", maxFileCount: 1 },
+    "image/jpeg": { maxFileSize: "4MB", maxFileCount: 1 },
+    "image/webp": { maxFileSize: "4MB", maxFileCount: 1 },
+  })
+    .middleware(async ({ req, res }) => {
+      // Authenticate user (email verification not required for avatar upload)
+      if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+        throw new Error("Neautorizovan pristup");
+      }
+      
+      const user = req.user as any;
+      return { userId: user.id, username: user.username };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      console.log("Avatar upload complete!");
+      console.log("User ID:", metadata.userId);
+      console.log("File URL:", file.url);
+      
+      return { 
+        uploadedBy: metadata.userId,
+        fileUrl: file.url,
+      };
+    }),
 } satisfies FileRouter;
 
 export type OurFileRouter = typeof uploadRouter;
