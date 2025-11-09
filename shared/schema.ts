@@ -738,8 +738,9 @@ export type Invoice = typeof invoices.$inferSelect;
 export const insertCommunityMessageSchema = createInsertSchema(communityMessages).omit({
   id: true,
   createdAt: true,
+  userId: true,
 }).extend({
-  message: z.string().min(1, "Poruka ne može biti prazna").max(500, "Poruka može imati maksimalno 500 karaktera"),
+  message: z.string().min(1, "Poruka ne može biti prazna").max(85, "Poruka može imati maksimalno 85 karaktera"),
 });
 
 export type InsertCommunityMessage = z.infer<typeof insertCommunityMessageSchema>;

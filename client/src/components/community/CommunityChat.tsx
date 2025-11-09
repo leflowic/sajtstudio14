@@ -191,7 +191,6 @@ function MessageInput({ onSubmit, isPending, cooldownSeconds, resetTrigger }: Me
   const form = useForm<InsertCommunityMessage>({
     resolver: zodResolver(insertCommunityMessageSchema),
     defaultValues: {
-      userId: 0,
       message: "",
     },
   });
@@ -202,7 +201,7 @@ function MessageInput({ onSubmit, isPending, cooldownSeconds, resetTrigger }: Me
 
   useEffect(() => {
     if (resetTrigger) {
-      form.reset({ userId: 0, message: "" });
+      form.reset({ message: "" });
     }
   }, [resetTrigger, form]);
 
@@ -218,7 +217,7 @@ function MessageInput({ onSubmit, isPending, cooldownSeconds, resetTrigger }: Me
                 <Textarea
                   {...field}
                   placeholder="Pošalji poruku..."
-                  maxLength={500}
+                  maxLength={85}
                   rows={3}
                   disabled={isPending || cooldownSeconds > 0}
                   data-testid="textarea-message"
@@ -236,7 +235,7 @@ function MessageInput({ onSubmit, isPending, cooldownSeconds, resetTrigger }: Me
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {form.watch("message")?.length || 0}/500
+              {form.watch("message")?.length || 0}/85
             </p>
           )}
 
