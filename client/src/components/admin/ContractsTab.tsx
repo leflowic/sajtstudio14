@@ -13,7 +13,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Download, Mail, Trash2, Music, Scale, DollarSign } from "lucide-react";
+import { FileText, Download, Mail, Trash2, Music, Scale, DollarSign, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -27,6 +27,8 @@ interface Contract {
   clientEmail: string | null;
   createdAt: string;
   createdBy: number;
+  userId: number | null;
+  username: string | null;
 }
 
 export function ContractsTab() {
@@ -37,6 +39,12 @@ export function ContractsTab() {
   // Contract history query
   const { data: contracts = [], isLoading: contractsLoading } = useQuery<Contract[]>({
     queryKey: ["/api/admin/contracts"],
+    enabled: activeTab === "history",
+  });
+
+  // Fetch all users for assignment dropdown
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ["/api/admin/users"],
     enabled: activeTab === "history",
   });
 
@@ -80,6 +88,27 @@ export function ContractsTab() {
         variant: "destructive",
         title: "Greška",
         description: "Greška pri brisanju ugovora",
+      });
+    },
+  });
+
+  // Assign user mutation
+  const assignUserMutation = useMutation({
+    mutationFn: async ({ contractId, userId }: { contractId: number; userId: number | null }) => {
+      await apiRequest("PATCH", `/api/admin/contracts/${contractId}/assign-user`, { userId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/contracts"] });
+      toast({
+        title: "Uspeh",
+        description: "Korisnik uspešno dodeljen ugovoru!",
+      });
+    },
+    onError: () => {
+      toast({
+        variant: "destructive",
+        title: "Greška",
+        description: "Greška pri dodeli korisnika",
       });
     },
   });
@@ -172,6 +201,7 @@ export function ContractsTab() {
                       <TableRow>
                         <TableHead>Broj</TableHead>
                         <TableHead>Tip</TableHead>
+                        <TableHead>Dodeljen Korisniku</TableHead>
                         <TableHead>Datum</TableHead>
                         <TableHead className="text-right">Akcije</TableHead>
                       </TableRow>
@@ -187,11 +217,30 @@ export function ContractsTab() {
                               {getContractTypeLabel(contract.contractType)}
                             </Badge>
                           </TableCell>
+                          <TableCell>
+                            {contract.username ? (
+                              <Badge variant="outline" className="text-xs">
+                                {contract.username}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">Nije dodeljen</span>
+                            )}
+                          </TableCell>
                           <TableCell className="text-muted-foreground">
                             {format(new Date(contract.createdAt), "dd.MM.yyyy")}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
+                              <AssignUserDialog
+                                contractId={contract.id}
+                                contractNumber={contract.contractNumber}
+                                currentUserId={contract.userId}
+                                currentUsername={contract.username}
+                                users={users}
+                                onAssign={(userId) => assignUserMutation.mutate({ contractId: contract.id, userId })}
+                                isAssigning={assignUserMutation.isPending}
+                              />
+
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -238,6 +287,93 @@ export function ContractsTab() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// Assign User Dialog Component
+function AssignUserDialog({
+  contractId,
+  contractNumber,
+  currentUserId,
+  currentUsername,
+  users,
+  onAssign,
+  isAssigning
+}: {
+  contractId: number;
+  contractNumber: string;
+  currentUserId: number | null;
+  currentUsername: string | null;
+  users: any[];
+  onAssign: (userId: number | null) => void;
+  isAssigning: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(currentUserId);
+
+  const handleAssign = () => {
+    onAssign(selectedUserId);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          data-testid={`button-assign-user-${contractId}`}
+          title={currentUsername ? `Trenutno dodeljen: ${currentUsername}` : "Dodeli korisniku"}
+        >
+          <UserPlus className="w-4 h-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Dodeli Ugovor Korisniku</DialogTitle>
+          <DialogDescription>
+            Ugovor {contractNumber} - Izaberite korisnika koji će videti ovaj ugovor u svom dashboard-u
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          {currentUsername && (
+            <div className="p-3 bg-muted rounded-md text-sm">
+              <span className="text-muted-foreground">Trenutno dodeljen: </span>
+              <span className="font-medium">{currentUsername}</span>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="user-select">Korisnik</Label>
+            <select
+              id="user-select"
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              value={selectedUserId || ""}
+              onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value) : null)}
+              data-testid="select-contract-user"
+            >
+              <option value="">Nijedan (ukloni dodelu)</option>
+              {users.map((user: any) => (
+                <option key={user.id} value={user.id}>
+                  {user.username} ({user.email})
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Otkaži
+          </Button>
+          <Button
+            onClick={handleAssign}
+            disabled={isAssigning}
+            data-testid="button-confirm-assign-user"
+          >
+            {isAssigning ? "Dodeljuje se..." : "Dodeli"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -196,10 +196,10 @@ export interface IStorage {
 
   // Contracts
   createContract(data: InsertContract): Promise<Contract>;
-  getAllContracts(): Promise<Contract[]>;
+  getAllContracts(): Promise<Array<Contract & { username: string | null }>>;
   getContractById(id: number): Promise<Contract | undefined>;
   getNextContractNumber(): Promise<string>;
-  updateContractUser(contractId: number, userId: number): Promise<void>;
+  updateContractUser(contractId: number, userId: number | null): Promise<void>;
   deleteContract(id: number): Promise<void>;
 
   // Invoices
@@ -1636,8 +1636,25 @@ export class DatabaseStorage implements IStorage {
     return contract!;
   }
 
-  async getAllContracts(): Promise<Contract[]> {
-    return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+  async getAllContracts(): Promise<Array<Contract & { username: string | null }>> {
+    const result = await db
+      .select({
+        id: contracts.id,
+        contractNumber: contracts.contractNumber,
+        contractType: contracts.contractType,
+        contractData: contracts.contractData,
+        pdfPath: contracts.pdfPath,
+        clientEmail: contracts.clientEmail,
+        createdAt: contracts.createdAt,
+        createdBy: contracts.createdBy,
+        userId: contracts.userId,
+        username: users.username,
+      })
+      .from(contracts)
+      .leftJoin(users, eq(contracts.userId, users.id))
+      .orderBy(desc(contracts.createdAt));
+    
+    return result as Array<Contract & { username: string | null }>;
   }
 
   async getContractById(id: number): Promise<Contract | undefined> {
@@ -1673,7 +1690,7 @@ export class DatabaseStorage implements IStorage {
     return `${nextNumber.toString().padStart(3, '0')}/${yearSuffix}`;
   }
 
-  async updateContractUser(contractId: number, userId: number): Promise<void> {
+  async updateContractUser(contractId: number, userId: number | null): Promise<void> {
     await db.update(contracts).set({ userId }).where(eq(contracts.id, contractId));
   }
 

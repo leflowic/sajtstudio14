@@ -2532,7 +2532,7 @@ Sitemap: ${siteUrl}/sitemap.xml
     }
   });
 
-  // Assign contract to user
+  // Assign contract to user (or remove assignment with null)
   app.patch("/api/admin/contracts/:id/assign-user", requireAdmin, async (req, res) => {
     try {
       const contractId = parseInt(req.params.id);
@@ -2542,20 +2542,30 @@ Sitemap: ${siteUrl}/sitemap.xml
         return res.status(400).json({ error: "Nevažeći ID ugovora" });
       }
 
-      if (!userId || isNaN(parseInt(userId))) {
-        return res.status(400).json({ error: "userId je obavezan" });
+      // userId can be null to remove assignment
+      let parsedUserId: number | null = null;
+      
+      if (userId !== null && userId !== undefined) {
+        parsedUserId = parseInt(userId);
+        if (isNaN(parsedUserId)) {
+          return res.status(400).json({ error: "Nevažeći userId" });
+        }
+
+        // Check if user exists (only if userId is provided)
+        const user = await storage.getUser(parsedUserId);
+        if (!user) {
+          return res.status(404).json({ error: "Korisnik nije pronađen" });
+        }
       }
 
-      // Check if user exists
-      const user = await storage.getUser(parseInt(userId));
-      if (!user) {
-        return res.status(404).json({ error: "Korisnik nije pronađen" });
-      }
+      // Update contract userId (can be null to remove assignment)
+      await storage.updateContractUser(contractId, parsedUserId);
 
-      // Update contract userId
-      await storage.updateContractUser(contractId, parseInt(userId));
+      const message = parsedUserId === null 
+        ? "Dodela ugovora uspešno uklonjena" 
+        : "Ugovor uspešno dodeljen korisniku";
 
-      res.json({ success: true, message: "Ugovor uspešno dodeljen korisniku" });
+      res.json({ success: true, message });
     } catch (error: any) {
       console.error("[CONTRACTS] Assign user error:", error);
       res.status(500).json({ error: "Greška pri dodeljivanju ugovora" });
