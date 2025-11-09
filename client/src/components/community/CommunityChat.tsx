@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 type CommunityMessageWithUser = {
@@ -67,25 +68,25 @@ function MessageItem({ message, isOwnMessage, isAdmin, onDelete }: MessageItemPr
 
   return (
     <div
-      className={cn("flex flex-col gap-1", isOwnMessage ? "items-start" : "items-end")}
+      className={cn("flex flex-col gap-1.5", isOwnMessage ? "items-end" : "items-start")}
       data-testid={`message-${message.id}`}
     >
       <div className="flex items-center gap-2">
         {!isOwnMessage && (
-          <Avatar className="h-6 w-6">
+          <Avatar className="h-7 w-7">
             <AvatarFallback className="text-xs">
               {message.username.substring(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
         )}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
           {rankIcon}
-          <span className={cn("text-sm font-medium", getRankColor(message.rank))}>
+          <span className={cn("text-sm font-semibold", getRankColor(message.rank))}>
             {message.username}
           </span>
         </div>
         {isOwnMessage && (
-          <Avatar className="h-6 w-6">
+          <Avatar className="h-7 w-7">
             <AvatarFallback className="text-xs">
               {message.username.substring(0, 2).toUpperCase()}
             </AvatarFallback>
@@ -93,30 +94,32 @@ function MessageItem({ message, isOwnMessage, isAdmin, onDelete }: MessageItemPr
         )}
       </div>
 
-      <div className={cn("flex items-start gap-2 max-w-[75%]", isOwnMessage ? "flex-row" : "flex-row-reverse")}>
+      <div className={cn("flex items-start gap-2 max-w-[80%]", isOwnMessage ? "flex-row-reverse" : "flex-row")}>
         <div
           className={cn(
-            "rounded-md p-3",
-            isOwnMessage ? "bg-muted" : "bg-primary/10"
+            "rounded-lg px-4 py-3 shadow-sm",
+            isOwnMessage 
+              ? "bg-primary text-primary-foreground" 
+              : "bg-muted border border-border"
           )}
         >
-          <p className="text-sm whitespace-pre-wrap break-words">{message.message}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{message.message}</p>
         </div>
 
         {canDelete && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
+            className="h-7 w-7 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
             onClick={() => onDelete(message.id)}
             data-testid={`button-delete-message-${message.id}`}
           >
-            <Trash2 className="h-4 w-4 text-destructive" />
+            <Trash2 className="h-3.5 w-3.5 text-destructive" />
           </Button>
         )}
       </div>
 
-      <span className="text-xs text-muted-foreground" data-testid={`timestamp-${message.id}`}>
+      <span className={cn("text-xs text-muted-foreground px-1", isOwnMessage ? "mr-1" : "")} data-testid={`timestamp-${message.id}`}>
         {formatDistanceToNow(new Date(message.createdAt), { addSuffix: true, locale: sr })}
       </span>
     </div>
@@ -136,11 +139,11 @@ interface MessageListProps {
 function MessageList({ messages, isLoading, currentUserId, isAdmin, onDelete, containerRef, endRef }: MessageListProps) {
   if (isLoading) {
     return (
-      <ScrollArea className="h-[500px] px-4">
-        <div className="space-y-4 py-4">
+      <ScrollArea className="h-[450px] px-6 bg-muted/30 rounded-lg">
+        <div className="space-y-5 py-6">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex flex-col gap-2">
-              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-28" />
               <Skeleton className="h-20 w-3/4" />
             </div>
           ))}
@@ -151,10 +154,10 @@ function MessageList({ messages, isLoading, currentUserId, isAdmin, onDelete, co
 
   if (messages.length === 0) {
     return (
-      <ScrollArea className="h-[500px] px-4">
+      <ScrollArea className="h-[450px] px-6 bg-muted/30 rounded-lg">
         <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-          <MessageSquare className="h-12 w-12 mb-4 opacity-50" />
-          <p className="text-lg mb-2">Nema poruka u chatu</p>
+          <MessageSquare className="h-16 w-16 mb-4 opacity-40" />
+          <p className="text-lg font-medium mb-2">Nema poruka u chatu</p>
           <p className="text-sm">Budite prvi koji će poslati poruku!</p>
         </div>
       </ScrollArea>
@@ -162,8 +165,8 @@ function MessageList({ messages, isLoading, currentUserId, isAdmin, onDelete, co
   }
 
   return (
-    <ScrollArea className="h-[500px] px-4" ref={containerRef}>
-      <div className="space-y-4 py-4">
+    <ScrollArea className="h-[450px] px-6 bg-muted/30 rounded-lg" ref={containerRef}>
+      <div className="space-y-5 py-6">
         {messages.map((message) => (
           <div key={message.id} className="group">
             <MessageItem
@@ -206,51 +209,54 @@ function MessageInput({ onSubmit, isPending, cooldownSeconds, resetTrigger }: Me
   }, [resetTrigger, form]);
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-2">
-        <FormField
-          control={form.control}
-          name="message"
-          render={({ field }) => (
-            <FormItem>
-              <FormControl>
-                <Textarea
-                  {...field}
-                  placeholder="Pošalji poruku..."
-                  maxLength={85}
-                  rows={3}
-                  disabled={isPending || cooldownSeconds > 0}
-                  data-testid="textarea-message"
-                  className="resize-none"
-                />
-              </FormControl>
-            </FormItem>
-          )}
-        />
+    <div className="bg-card rounded-lg border p-4">
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-3">
+          <FormField
+            control={form.control}
+            name="message"
+            render={({ field }) => (
+              <FormItem>
+                <FormControl>
+                  <Textarea
+                    {...field}
+                    placeholder="Napiši poruku..."
+                    maxLength={85}
+                    rows={2}
+                    disabled={isPending || cooldownSeconds > 0}
+                    data-testid="textarea-message"
+                    className="resize-none focus-visible:ring-1"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
 
-        <div className="flex items-center justify-between gap-2">
-          {cooldownSeconds > 0 ? (
-            <p className="text-sm text-muted-foreground" data-testid="text-cooldown">
-              Sledeća poruka za {cooldownSeconds}s
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {form.watch("message")?.length || 0}/85
-            </p>
-          )}
+          <div className="flex items-center justify-between gap-3">
+            {cooldownSeconds > 0 ? (
+              <p className="text-sm font-medium text-destructive" data-testid="text-cooldown">
+                Sledeća poruka za {cooldownSeconds}s
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {form.watch("message")?.length || 0}/85 karaktera
+              </p>
+            )}
 
-          <Button
-            type="submit"
-            disabled={isPending || cooldownSeconds > 0 || !form.watch("message")?.trim()}
-            data-testid="button-send-message"
-            className="gap-2"
-          >
-            <Send className="h-4 w-4" />
-            Pošalji
-          </Button>
-        </div>
-      </form>
-    </Form>
+            <Button
+              type="submit"
+              disabled={isPending || cooldownSeconds > 0 || !form.watch("message")?.trim()}
+              data-testid="button-send-message"
+              className="gap-2"
+              size="default"
+            >
+              <Send className="h-4 w-4" />
+              Pošalji
+            </Button>
+          </div>
+        </form>
+      </Form>
+    </div>
   );
 }
 
@@ -397,11 +403,11 @@ export function CommunityChat() {
 
   if (!user) {
     return (
-      <Card className="w-full max-w-4xl mx-auto">
-        <CardContent className="py-16">
+      <Card className="w-full max-w-5xl mx-auto shadow-sm">
+        <CardContent className="py-20">
           <div className="text-center text-muted-foreground">
-            <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p className="text-lg mb-2">Prijavite se da pristupite chatu</p>
+            <MessageSquare className="h-16 w-16 mx-auto mb-6 opacity-40" />
+            <p className="text-xl font-semibold mb-3">Prijavite se da pristupite chatu</p>
             <p className="text-sm">Chat zajednice je dostupan samo registrovanim korisnicima</p>
           </div>
         </CardContent>
@@ -412,17 +418,29 @@ export function CommunityChat() {
   const isAdmin = user.role === "admin" || user.rank === "admin";
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <MessageSquare className="h-6 w-6" />
-          Chat Zajednice
-        </CardTitle>
-        <CardDescription>
-          Razgovarajte sa drugim članovima zajednice Studio LeFlow
-        </CardDescription>
+    <Card className="w-full max-w-5xl mx-auto shadow-lg">
+      <CardHeader className="border-b bg-muted/50">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-3 text-2xl">
+              <MessageSquare className="h-7 w-7 text-primary" />
+              Chat Zajednice
+            </CardTitle>
+            <CardDescription className="mt-2">
+              Razgovarajte u real-time sa drugim članovima zajednice Studio LeFlow
+            </CardDescription>
+          </div>
+          <Badge variant="secondary" className="gap-1.5">
+            <UserIcon className="h-3 w-3" />
+            {messages.length} {
+              messages.length === 1 ? 'poruka' : 
+              messages.length >= 2 && messages.length <= 4 ? 'poruke' : 
+              'poruka'
+            }
+          </Badge>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="p-6 space-y-6">
         <MessageList
           messages={messages}
           isLoading={isLoading}
