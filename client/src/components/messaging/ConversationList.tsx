@@ -102,7 +102,7 @@ export default function ConversationList({ selectedUserId, onSelectConversation,
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-testid="conversation-list">
       <div className="p-4">
         <UserSearch onSelectUser={onSelectConversation} />
       </div>
@@ -111,7 +111,7 @@ export default function ConversationList({ selectedUserId, onSelectConversation,
       
       <ScrollArea className="flex-1">
         {filteredConversations && filteredConversations.length > 0 ? (
-          <div>
+          <div data-testid="conversations-list">
             {filteredConversations.map((conversation) => (
               <button
                 key={conversation.id}
@@ -120,6 +120,7 @@ export default function ConversationList({ selectedUserId, onSelectConversation,
                   "w-full flex items-start gap-3 p-4 hover:bg-muted/50 transition-colors text-left border-b",
                   selectedUserId === conversation.otherUser.id && "bg-muted"
                 )}
+                data-testid={`conversation-item-${conversation.otherUser.id}`}
               >
                 <AvatarWithInitials
                   src={conversation.otherUser.avatarUrl}

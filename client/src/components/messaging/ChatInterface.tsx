@@ -220,6 +220,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
             size="icon"
             onClick={onBack}
             className="md:hidden"
+            data-testid="button-back-to-inbox"
           >
             <ArrowLeft className="w-5 h-5" />
           </Button>

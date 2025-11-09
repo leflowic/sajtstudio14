@@ -36,9 +36,13 @@ export default function Inbox() {
       </Helmet>
 
       <div className="h-full flex flex-col md:flex-row">
-        <Card className={`w-full md:w-96 md:rounded-none md:rounded-l-lg border-0 md:border-r ${selectedUserId ? 'hidden md:flex' : 'flex'} flex-col`}>
+        {/* Inbox sidebar - visible on mobile when no conversation selected */}
+        <Card 
+          className={`w-full md:w-96 md:rounded-none md:rounded-l-lg border-0 md:border-r ${selectedUserId ? 'hidden md:flex' : 'flex'} flex-col`}
+          data-testid="inbox-sidebar"
+        >
           <div className="p-4 border-b space-y-3">
-            <h2 className="text-xl font-bold">Poruke</h2>
+            <h2 className="text-xl font-bold" data-testid="text-inbox-title">Poruke</h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -62,7 +66,11 @@ export default function Inbox() {
 
         <Separator orientation="vertical" className="hidden md:block" />
 
-        <div className={`flex-1 flex flex-col bg-muted/20 ${selectedUserId ? 'flex' : 'hidden md:flex'}`}>
+        {/* Chat area - visible on mobile when conversation is selected */}
+        <div 
+          className={`flex-1 flex flex-col bg-muted/20 ${selectedUserId ? 'flex' : 'hidden md:flex'}`}
+          data-testid="chat-area"
+        >
           {selectedUserId ? (
             <ChatInterface
               selectedUserId={selectedUserId}
