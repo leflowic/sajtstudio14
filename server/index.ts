@@ -107,18 +107,12 @@ app.use((req, res, next) => {
     // Check critical environment variables - FAIL FAST if missing
     const missingEnvVars: string[] = [];
     
+    // Critical environment variables required for the app to function
     if (!process.env.DATABASE_URL) {
       missingEnvVars.push('DATABASE_URL');
     }
     if (!process.env.SESSION_SECRET) {
       missingEnvVars.push('SESSION_SECRET');
-    }
-    
-    // In production, also check for required API keys
-    if (env === 'production') {
-      if (!process.env.UPLOADTHING_TOKEN && !process.env.UPLOADTHING_SECRET) {
-        missingEnvVars.push('UPLOADTHING_TOKEN or UPLOADTHING_SECRET');
-      }
     }
     
     if (missingEnvVars.length > 0) {
@@ -129,12 +123,52 @@ app.use((req, res, next) => {
       console.error('='.repeat(80));
       console.error('\nThe following environment variables are required but not set:');
       missingEnvVars.forEach(v => console.error(`  - ${v}`));
+      console.error('\nRequired for all environments:');
+      console.error('  - DATABASE_URL: PostgreSQL connection string');
+      console.error('  - SESSION_SECRET: Secret key for session encryption');
+      console.error('\nOptional (for specific features):');
+      console.error('  - UPLOADTHING_TOKEN: For file uploads (avatars, MP3 files)');
+      console.error('  - RESEND_API_KEY: For email functionality');
+      console.error('  - RESEND_FROM_EMAIL: Sender email address');
       console.error('\nPlease add these in Replit Deployment → Secrets');
       console.error('='.repeat(80) + '\n');
       process.exit(1);
     }
     
     log('All required environment variables present', 'express');
+    
+    // Warn about optional environment variables in production
+    const optionalWarnings: string[] = [];
+    
+    // UploadThing: Check for both TOKEN and SECRET (both needed for file uploads)
+    const hasUploadThingToken = !!process.env.UPLOADTHING_TOKEN;
+    const hasUploadThingSecret = !!process.env.UPLOADTHING_SECRET;
+    
+    if (!hasUploadThingToken && !hasUploadThingSecret) {
+      optionalWarnings.push('UPLOADTHING_TOKEN and UPLOADTHING_SECRET not set - file upload features (avatars, MP3 files) will be completely disabled');
+    } else if (!hasUploadThingToken) {
+      optionalWarnings.push('UPLOADTHING_TOKEN not set - file upload features will NOT work (UPLOADTHING_SECRET alone is insufficient)');
+    } else if (!hasUploadThingSecret) {
+      optionalWarnings.push('UPLOADTHING_SECRET not set - file upload features will NOT work (UPLOADTHING_TOKEN alone is insufficient)');
+    }
+    
+    // Resend: Check API key and from email separately
+    if (!process.env.RESEND_API_KEY) {
+      optionalWarnings.push('RESEND_API_KEY not set - email features (verification, password reset, contact form) will be disabled');
+    }
+    if (!process.env.RESEND_FROM_EMAIL) {
+      optionalWarnings.push('RESEND_FROM_EMAIL not set - emails cannot be sent even if RESEND_API_KEY is configured');
+    }
+    
+    if (optionalWarnings.length > 0 && env === 'production') {
+      console.warn('\n' + '-'.repeat(80));
+      console.warn('WARNING: Optional environment variables not configured:');
+      console.warn('-'.repeat(80));
+      optionalWarnings.forEach(warning => console.warn('  - ' + warning));
+      console.warn('\nThe application will start, but some features will be unavailable.');
+      console.warn('Add these secrets in Replit Deployment → Secrets to enable all features.');
+      console.warn('-'.repeat(80) + '\n');
+    }
     
     // Seed CMS content if needed
     await seedCmsContent();
