@@ -30,6 +30,7 @@ The website features a modern, responsive design using Tailwind CSS and shadcn/u
 - **Google Search SEO & Favicon Optimization**: Comprehensive SEO improvements.
 - **User Profile Pictures**: Avatar management with upload, deletion, and dynamic initials display.
 - **Contract Builder System**: Generates three types of contracts (Mix & Master, Copyright Transfer, Instrumental Sale) with PDF features like DejaVu Sans font support for Serbian characters, Studio LeFlow logo, automatic numbering, and storage. Admin panel features include contract generation via form, preview, download, email sending, deletion, and history tracking.
+- **User Song Sharing & Voting (Zajednica)**: Public community page (/zajednica) where users can share their favorite songs via YouTube links. Features include admin approval workflow, community voting system with atomic vote tracking, unique vote constraints (one vote per user per song), vote count display, and songs sorted by popularity. Only verified users can vote.
 
 ### System Design Choices
 - **Database**: PostgreSQL managed by Replit, utilizing Drizzle ORM for schema management.
