@@ -141,7 +141,7 @@ export function ContractsTab() {
             </CardHeader>
             <CardContent>
               <Tabs value={selectedContractType} onValueChange={(v) => setSelectedContractType(v as any)}>
-                <TabsList className="flex flex-col md:grid md:grid-cols-3 w-full gap-2">
+                <TabsList className="flex flex-col md:grid md:grid-cols-3 w-full gap-2 mb-6">
                   <TabsTrigger value="mix_master" className="flex items-center justify-center gap-2" data-testid="tab-contract-mix-master">
                     <Music className="w-4 h-4" />
                     Mix & Master
@@ -156,15 +156,15 @@ export function ContractsTab() {
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="mix_master">
+                <TabsContent value="mix_master" className="mt-0">
                   <MixMasterForm onSubmit={(data) => generateMutation.mutate({ contractType: "mix_master", contractData: data })} isSubmitting={generateMutation.isPending} />
                 </TabsContent>
 
-                <TabsContent value="copyright_transfer">
+                <TabsContent value="copyright_transfer" className="mt-0">
                   <CopyrightTransferForm onSubmit={(data) => generateMutation.mutate({ contractType: "copyright_transfer", contractData: data })} isSubmitting={generateMutation.isPending} />
                 </TabsContent>
 
-                <TabsContent value="instrumental_sale">
+                <TabsContent value="instrumental_sale" className="mt-0">
                   <InstrumentalSaleForm onSubmit={(data) => generateMutation.mutate({ contractType: "instrumental_sale", contractData: data })} isSubmitting={generateMutation.isPending} />
                 </TabsContent>
               </Tabs>
