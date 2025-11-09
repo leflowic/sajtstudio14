@@ -97,7 +97,7 @@ export function Header() {
             <span className="text-xl font-bold font-[Montserrat] uppercase">STUDIO LEFLOW</span>
           </Link>
 
-          <nav className="hidden xl:flex items-center gap-0.5">
+          <nav className="hidden xl:flex items-center gap-0.5 ml-8">
             {navigation.map((item) => (
               <motion.div key={item.name} whileHover={{ y: -2 }} transition={{ duration: 0.2 }} className="flex items-center">
                 <Link 
