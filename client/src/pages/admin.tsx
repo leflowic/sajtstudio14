@@ -157,17 +157,19 @@ export default function AdminPage() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-admin">
-          <TabsList className="grid w-full grid-cols-9 mb-8" data-testid="tabs-list-admin">
-            <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">Korisnici</TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">Projekti</TabsTrigger>
-            <TabsTrigger value="comments" data-testid="tab-comments">Komentari</TabsTrigger>
-            <TabsTrigger value="newsletter" data-testid="tab-newsletter">Newsletter</TabsTrigger>
-            <TabsTrigger value="messages" data-testid="tab-messages">Poruke</TabsTrigger>
-            <TabsTrigger value="contracts" data-testid="tab-contracts">Ugovori</TabsTrigger>
-            <TabsTrigger value="cms" data-testid="tab-cms">CMS</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings">Podešavanja</TabsTrigger>
-          </TabsList>
+          <div className="mb-8 overflow-x-auto">
+            <TabsList className="inline-flex lg:grid lg:grid-cols-9 w-full lg:w-full" data-testid="tabs-list-admin">
+              <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="whitespace-nowrap">Dashboard</TabsTrigger>
+              <TabsTrigger value="users" data-testid="tab-users" className="whitespace-nowrap">Korisnici</TabsTrigger>
+              <TabsTrigger value="projects" data-testid="tab-projects" className="whitespace-nowrap">Projekti</TabsTrigger>
+              <TabsTrigger value="comments" data-testid="tab-comments" className="whitespace-nowrap">Komentari</TabsTrigger>
+              <TabsTrigger value="newsletter" data-testid="tab-newsletter" className="whitespace-nowrap">Newsletter</TabsTrigger>
+              <TabsTrigger value="messages" data-testid="tab-messages" className="whitespace-nowrap">Poruke</TabsTrigger>
+              <TabsTrigger value="contracts" data-testid="tab-contracts" className="whitespace-nowrap">Ugovori</TabsTrigger>
+              <TabsTrigger value="cms" data-testid="tab-cms" className="whitespace-nowrap">CMS</TabsTrigger>
+              <TabsTrigger value="settings" data-testid="tab-settings" className="whitespace-nowrap">Podešavanja</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="dashboard">
             <DashboardTab />
@@ -560,7 +562,7 @@ function NewsletterTab() {
               Nema pretplatnika
             </p>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1025,7 +1027,7 @@ function MessagesTab() {
               Nema audit log zapisa
             </p>
           ) : (
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>

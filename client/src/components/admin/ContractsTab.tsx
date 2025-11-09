@@ -43,11 +43,7 @@ export function ContractsTab() {
   // Generate contract mutation
   const generateMutation = useMutation({
     mutationFn: async (data: { contractType: string; contractData: any }) => {
-      const response = await apiRequest("/api/admin/contracts/generate", {
-        method: "POST",
-        body: JSON.stringify(data),
-        headers: { "Content-Type": "application/json" },
-      });
+      const response = await apiRequest("POST", "/api/admin/contracts/generate", data);
       return response;
     },
     onSuccess: () => {
@@ -70,7 +66,7 @@ export function ContractsTab() {
   // Delete contract mutation
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await apiRequest(`/api/admin/contracts/${id}`, { method: "DELETE" });
+      await apiRequest("DELETE", `/api/admin/contracts/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/contracts"] });
@@ -115,7 +111,7 @@ export function ContractsTab() {
             </CardHeader>
             <CardContent>
               <Tabs value={selectedContractType} onValueChange={(v) => setSelectedContractType(v as any)}>
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3">
                   <TabsTrigger value="mix_master" className="flex items-center gap-2">
                     <Music className="w-4 h-4" />
                     Mix & Master
@@ -170,7 +166,7 @@ export function ContractsTab() {
                   <p>Još uvek nema kreiranih ugovora</p>
                 </div>
               ) : (
-                <div className="rounded-md border">
+                <div className="rounded-md border overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -253,11 +249,7 @@ function SendEmailDialog({ contractId, contractNumber }: { contractId: number; c
 
   const sendEmailMutation = useMutation({
     mutationFn: async () => {
-      await apiRequest(`/api/admin/contracts/${contractId}/send-email`, {
-        method: "POST",
-        body: JSON.stringify({ email }),
-        headers: { "Content-Type": "application/json" },
-      });
+      await apiRequest("POST", `/api/admin/contracts/${contractId}/send-email`, { email });
     },
     onSuccess: () => {
       toast({
@@ -364,7 +356,7 @@ function MixMasterForm({ onSubmit, isSubmitting }: { onSubmit: (data: any) => vo
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-6 mt-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Datum Ugovora</Label>
           <Input value={formData.contractDate} onChange={(e) => handleChange("contractDate", e.target.value)} data-testid="input-contract-date" />
@@ -377,7 +369,7 @@ function MixMasterForm({ onSubmit, isSubmitting }: { onSubmit: (data: any) => vo
 
       <div className="space-y-4">
         <h3 className="font-semibold">Studio Podaci</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Naziv Studija</Label>
             <Input value={formData.studioName} onChange={(e) => handleChange("studioName", e.target.value)} data-testid="input-studio-name" />
@@ -395,7 +387,7 @@ function MixMasterForm({ onSubmit, isSubmitting }: { onSubmit: (data: any) => vo
 
       <div className="space-y-4">
         <h3 className="font-semibold">Podaci Klijenta</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ime i Prezime / Poslovno Ime</Label>
             <Input value={formData.clientName} onChange={(e) => handleChange("clientName", e.target.value)} data-testid="input-client-name" required />
@@ -413,7 +405,7 @@ function MixMasterForm({ onSubmit, isSubmitting }: { onSubmit: (data: any) => vo
 
       <div className="space-y-4">
         <h3 className="font-semibold">Detalji Projekta</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Naziv Pesme / Projekta</Label>
             <Input value={formData.projectName} onChange={(e) => handleChange("projectName", e.target.value)} data-testid="input-project-name" required />
@@ -435,7 +427,7 @@ function MixMasterForm({ onSubmit, isSubmitting }: { onSubmit: (data: any) => vo
 
       <div className="space-y-4">
         <h3 className="font-semibold">Finansije</h3>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Ukupna Naknada (RSD)</Label>
             <Input type="number" value={formData.totalAmount} onChange={(e) => handleChange("totalAmount", e.target.value)} data-testid="input-total-amount" required />
@@ -560,7 +552,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-6 mt-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Datum Ugovora</Label>
           <Input value={formData.contractDate} onChange={(e) => handleChange("contractDate", e.target.value)} data-testid="input-contract-date-copyright" />
@@ -573,7 +565,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
 
       <div className="space-y-4">
         <h3 className="font-semibold">Autor/Prodavac</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ime i Prezime</Label>
             <Input value={formData.authorName} onChange={(e) => handleChange("authorName", e.target.value)} data-testid="input-author-name" required />
@@ -591,7 +583,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
 
       <div className="space-y-4">
         <h3 className="font-semibold">Kupac</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ime i Prezime</Label>
             <Input value={formData.buyerName} onChange={(e) => handleChange("buyerName", e.target.value)} data-testid="input-buyer-name" required />
@@ -671,7 +663,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Teritorija Korišćenja</Label>
             <Input value={formData.territory} onChange={(e) => handleChange("territory", e.target.value)} data-testid="input-territory" />
@@ -685,7 +677,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
 
       <div className="space-y-4">
         <h3 className="font-semibold">Finansije</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ukupna Naknada (RSD)</Label>
             <Input type="number" value={formData.totalAmount} onChange={(e) => handleChange("totalAmount", e.target.value)} data-testid="input-total-amount-copyright" required />
@@ -697,7 +689,7 @@ function CopyrightTransferForm({ onSubmit, isSubmitting }: { onSubmit: (data: an
         </div>
         <div className="space-y-2">
           <Label>Podela Streaming Prihoda</Label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Autor (%)</Label>
               <Input type="number" value={formData.authorPercentage} onChange={(e) => handleChange("authorPercentage", e.target.value)} data-testid="input-author-percentage" />
@@ -779,7 +771,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); onSubmit(formData); }} className="space-y-6 mt-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Datum Ugovora</Label>
           <Input value={formData.contractDate} onChange={(e) => handleChange("contractDate", e.target.value)} data-testid="input-contract-date-instrumental" />
@@ -792,7 +784,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
 
       <div className="space-y-4">
         <h3 className="font-semibold">Autor/Prodavac (Studio)</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ime i Prezime</Label>
             <Input value={formData.authorName} onChange={(e) => handleChange("authorName", e.target.value)} data-testid="input-author-name-instrumental" required />
@@ -810,7 +802,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
 
       <div className="space-y-4">
         <h3 className="font-semibold">Kupac</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Ime i Prezime</Label>
             <Input value={formData.buyerName} onChange={(e) => handleChange("buyerName", e.target.value)} data-testid="input-buyer-name-instrumental" required />
@@ -828,7 +820,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
 
       <div className="space-y-4">
         <h3 className="font-semibold">Instrumental</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Naziv Instrumentala</Label>
             <Input value={formData.instrumentalName} onChange={(e) => handleChange("instrumentalName", e.target.value)} data-testid="input-instrumental-name" required />
@@ -875,7 +867,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Teritorija Korišćenja</Label>
             <Input value={formData.territory} onChange={(e) => handleChange("territory", e.target.value)} data-testid="input-territory-instrumental" />
@@ -889,7 +881,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
 
       <div className="space-y-4">
         <h3 className="font-semibold">Finansije</h3>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Ukupna Naknada (RSD)</Label>
             <Input type="number" value={formData.totalAmount} onChange={(e) => handleChange("totalAmount", e.target.value)} data-testid="input-total-amount-instrumental" required />
@@ -909,7 +901,7 @@ function InstrumentalSaleForm({ onSubmit, isSubmitting }: { onSubmit: (data: any
         </div>
         <div className="space-y-2">
           <Label>Podela Streaming Prihoda</Label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Autor (%)</Label>
               <Input type="number" value={formData.authorPercentage} onChange={(e) => handleChange("authorPercentage", e.target.value)} data-testid="input-author-percentage-instrumental" />
