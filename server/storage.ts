@@ -32,6 +32,8 @@ import {
   type RegistrationAttempt,
   type CommunityMessage,
   type InsertCommunityMessage,
+  type SiteAnnouncement,
+  type InsertSiteAnnouncement,
   contactSubmissions,
   users,
   projects,
@@ -53,6 +55,7 @@ import {
   pendingUsers,
   registrationAttempts,
   communityMessages,
+  siteAnnouncement,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, or, desc, sql, notInArray } from "drizzle-orm";
@@ -222,6 +225,10 @@ export interface IStorage {
   clearAllCommunityMessages(): Promise<void>;
   canUserSendMessage(userId: number): Promise<boolean>;
   updateUserRank(userId: number, rank: string): Promise<void>;
+
+  // Site Announcement
+  getSiteAnnouncement(): Promise<SiteAnnouncement>;
+  upsertSiteAnnouncement(data: InsertSiteAnnouncement): Promise<SiteAnnouncement>;
 
   // Dashboard
   getUserProjects(userId: number): Promise<Array<Project & { username: string }>>;
@@ -2271,6 +2278,53 @@ export class DatabaseStorage implements IStorage {
         throw error;
       }
       throw new Error('Failed to update user rank');
+    }
+  }
+
+  // Site Announcement
+  async getSiteAnnouncement(): Promise<SiteAnnouncement> {
+    try {
+      const [announcement] = await db
+        .select()
+        .from(siteAnnouncement)
+        .where(eq(siteAnnouncement.id, 1))
+        .limit(1);
+
+      // If no announcement exists, create default one
+      if (!announcement) {
+        const [newAnnouncement] = await db
+          .insert(siteAnnouncement)
+          .values({ id: 1, isActive: false, message: '' })
+          .returning();
+        return newAnnouncement!;
+      }
+
+      return announcement;
+    } catch (error) {
+      console.error('Error getting site announcement:', error);
+      throw new Error('Failed to get site announcement');
+    }
+  }
+
+  async upsertSiteAnnouncement(data: InsertSiteAnnouncement): Promise<SiteAnnouncement> {
+    try {
+      const [updated] = await db
+        .insert(siteAnnouncement)
+        .values({ id: 1, ...data, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: siteAnnouncement.id,
+          set: { 
+            isActive: data.isActive,
+            message: data.message,
+            updatedAt: new Date()
+          }
+        })
+        .returning();
+
+      return updated!;
+    } catch (error) {
+      console.error('Error upserting site announcement:', error);
+      throw new Error('Failed to update site announcement');
     }
   }
 }

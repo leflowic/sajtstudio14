@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { wsHelpers, notifyUser, getOnlineUsersSnapshot } from "./websocket-helpers";
-import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, insertInvoiceSchema, insertCommunityMessageSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema, type CmsContent, type CmsMedia, type VideoSpot, type UserSong } from "@shared/schema";
+import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, insertInvoiceSchema, insertCommunityMessageSchema, insertSiteAnnouncementSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema, type CmsContent, type CmsMedia, type VideoSpot, type UserSong } from "@shared/schema";
 import { sendEmail, getLastVerificationCode } from "./resend-client";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import multer from "multer";
@@ -1984,6 +1984,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).end();
     } catch (error) {
       console.error("Error deleting community message:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // ============================================================================
+  // SITE ANNOUNCEMENT ENDPOINTS
+  // ============================================================================
+
+  // GET /api/announcement - Get site announcement (PUBLIC)
+  app.get("/api/announcement", async (req, res) => {
+    try {
+      const announcement = await storage.getSiteAnnouncement();
+      res.json(announcement);
+    } catch (error) {
+      console.error("Error fetching site announcement:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // PATCH /api/announcement - Update site announcement (ADMIN only)
+  app.patch("/api/announcement", requireAdmin, async (req, res) => {
+    try {
+      const validated = insertSiteAnnouncementSchema.parse(req.body);
+      const updated = await storage.upsertSiteAnnouncement(validated);
+      res.json(updated);
+    } catch (error: any) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Validacija nije uspela", details: error.errors });
+      }
+      console.error("Error updating site announcement:", error);
       res.status(500).json({ error: "Greška na serveru" });
     }
   });

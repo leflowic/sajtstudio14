@@ -142,6 +142,24 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Site Announcement table - singleton for homepage announcement banner
+export const siteAnnouncement = pgTable("site_announcement", {
+  id: serial("id").primaryKey(),
+  isActive: boolean("is_active").notNull().default(false),
+  message: text("message").notNull().default(""),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertSiteAnnouncementSchema = createInsertSchema(siteAnnouncement).omit({
+  id: true,
+  updatedAt: true,
+}).extend({
+  message: z.string().max(500, "Poruka može imati maksimalno 500 karaktera"),
+});
+
+export type InsertSiteAnnouncement = z.infer<typeof insertSiteAnnouncementSchema>;
+export type SiteAnnouncement = typeof siteAnnouncement.$inferSelect;
+
 // CMS Page and Section enums
 export const cmsPages = ["home", "team"] as const;
 export const cmsSections = ["hero", "services", "equipment", "cta", "members"] as const;
