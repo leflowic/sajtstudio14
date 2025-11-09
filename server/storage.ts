@@ -159,6 +159,7 @@ export interface IStorage {
   getConversation(user1Id: number, user2Id: number): Promise<Conversation | undefined>;
   getUserConversations(userId: number): Promise<Array<Conversation & { otherUser: { id: number; username: string; avatarUrl: string | null }; lastMessage?: Message; unreadCount: number }>>;
   sendMessage(senderId: number, receiverId: number, content: string, imageUrl?: string): Promise<Message>;
+  getMessageById(messageId: number): Promise<Message | undefined>;
   getConversationMessages(conversationId: number, userId: number): Promise<Message[]>;
   markMessagesAsRead(conversationId: number, userId: number): Promise<void>;
   getUnreadMessageCount(userId: number): Promise<number>;
@@ -1154,6 +1155,15 @@ export class DatabaseStorage implements IStorage {
       .where(eq(conversations.id, conversation.id));
 
     return message!;
+  }
+
+  async getMessageById(messageId: number): Promise<Message | undefined> {
+    const [message] = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.id, messageId));
+    
+    return message || undefined;
   }
 
   async getConversationMessages(conversationId: number, userId: number): Promise<Message[]> {

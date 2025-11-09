@@ -82,6 +82,9 @@ export default function ConversationList({ selectedUserId, onSelectConversation,
       if (message.type === "message_read") {
         refetch();
       }
+      if (message.type === "message_deleted") {
+        refetch();
+      }
     });
 
     return unsubscribe;

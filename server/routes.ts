@@ -1872,6 +1872,20 @@ Sitemap: ${siteUrl}/sitemap.xml
         imageUrl
       );
       
+      // Broadcast new_message event to receiver via WebSocket
+      if (wsHelpers.broadcastToUser) {
+        wsHelpers.broadcastToUser(receiverId, {
+          type: 'new_message',
+          message,
+        });
+        
+        // Also broadcast to sender to update their own conversation list
+        wsHelpers.broadcastToUser(req.user!.id, {
+          type: 'new_message',
+          message,
+        });
+      }
+      
       res.json(message);
     } catch (error: any) {
       console.error("[MESSAGING] Send message error:", error);
@@ -1910,10 +1924,24 @@ Sitemap: ${siteUrl}/sitemap.xml
         return res.status(400).json({ error: "Nevažeći ID poruke" });
       }
       
+      // Get message details before deletion for WebSocket broadcast
+      const message = await storage.getMessageById(messageId);
+      
       const success = await storage.deleteMessage(messageId, req.user!.id);
       
       if (!success) {
         return res.status(403).json({ error: "Ne možete obrisati ovu poruku" });
+      }
+      
+      // Broadcast message deletion to both sender and receiver via WebSocket
+      if (message && wsHelpers.broadcastToUser) {
+        const deletedMessageEvent = {
+          type: 'message_deleted',
+          messageId,
+        };
+        
+        wsHelpers.broadcastToUser(message.senderId, deletedMessageEvent);
+        wsHelpers.broadcastToUser(message.receiverId, deletedMessageEvent);
       }
       
       res.json({ success: true });

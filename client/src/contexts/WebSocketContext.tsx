@@ -7,7 +7,8 @@ export type WebSocketMessage =
   | { type: 'typing_start'; userId: number }
   | { type: 'typing_stop'; userId: number }
   | { type: 'new_message'; message: any }
-  | { type: 'message_read'; conversationId: number; readBy: number };
+  | { type: 'message_read'; conversationId: number; readBy: number }
+  | { type: 'message_deleted'; messageId: number };
 
 interface WebSocketContextType {
   isConnected: boolean;

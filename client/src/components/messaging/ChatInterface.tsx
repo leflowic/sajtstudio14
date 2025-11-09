@@ -154,6 +154,10 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
         scrollToBottom();
       }
       
+      if (message.type === "message_deleted") {
+        queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
+      }
+      
       if (message.type === "typing_start" && message.userId === selectedUserId) {
         setOtherUserTyping(true);
       }
