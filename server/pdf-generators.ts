@@ -136,32 +136,60 @@ export interface InstrumentalSaleContract {
 /**
  * Helper function to draw Studio LeFlow logo at top-right of contract
  */
-function drawContractLogo(doc: PDFKit.PDFDocument): void {
+/**
+ * Draw professional contract header with Studio LeFlow logo
+ * Returns the Y position where body content should start
+ */
+function drawContractLogo(doc: PDFKit.PDFDocument): number {
   try {
     const logoPath = path.resolve(process.cwd(), 'attached_assets', 'logo', 'studioleflow-transparent.png');
-    const logoWidth = 120; // 120pt width as recommended by architect
+    const logoWidth = 85; // Professional size for A4 header
+    const headerHeight = 100; // Total header band height
     
-    // Save current Y position
-    const startY = doc.y;
-    
-    // Calculate X position for right-aligned logo (accounting for right margin of 72pt)
+    // Start from absolute page top (accounting for top margin)
+    const headerTop = doc.page.margins.top;
     const pageWidth = doc.page.width;
-    const rightMargin = 72;
-    const logoX = pageWidth - rightMargin - logoWidth;
+    const leftMargin = doc.page.margins.left;
+    const rightMargin = doc.page.margins.right;
     
-    // Draw logo at top-right, maintaining aspect ratio
-    doc.image(logoPath, logoX, startY, {
+    // Center logo horizontally
+    const logoX = (pageWidth - logoWidth) / 2;
+    
+    // Draw logo centered in header
+    doc.image(logoPath, logoX, headerTop + 10, {
       width: logoWidth,
-      align: 'right'
+      align: 'center'
     });
     
-    // Move cursor below the logo with some spacing
-    // Assuming logo height is ~60pt at 120pt width, add spacing
-    doc.moveDown(4);
+    // Studio info text below logo (centered)
+    doc.fontSize(9)
+      .font('DejaVuSans')
+      .fillColor('#666666');
+    
+    const infoY = headerTop + 70; // Position below logo
+    doc.text('Studio LeFlow | Beograd, Srbija', leftMargin, infoY, {
+      width: pageWidth - leftMargin - rightMargin,
+      align: 'center'
+    });
+    
+    // Draw horizontal separator line
+    const lineY = headerTop + headerHeight - 10;
+    doc.strokeColor('#cccccc')
+      .lineWidth(1)
+      .moveTo(leftMargin, lineY)
+      .lineTo(pageWidth - rightMargin, lineY)
+      .stroke();
+    
+    // Reset text color to black for body content
+    doc.fillColor('#000000');
+    
+    // Return Y position where body content should start
+    return headerTop + headerHeight + 10;
     
   } catch (error) {
-    // Graceful fallback if logo is missing - just skip it
+    // Graceful fallback if logo is missing - return default starting position
     console.error('[PDF] Failed to load logo:', error);
+    return doc.page.margins.top + 20;
   }
 }
 
@@ -184,10 +212,11 @@ export function generateMixMasterPDF(data: MixMasterContract): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
-    // Draw Studio LeFlow logo at top-right
-    drawContractLogo(doc);
+    // Draw professional contract header with logo
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
 
-    // Header
+    // Contract title
     doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRUŽANJU USLUGA MIXINGA I MASTERINGA', { align: 'center' });
     doc.moveDown(2);
 
@@ -345,10 +374,11 @@ export function generateCopyrightTransferPDF(data: CopyrightTransferContract): P
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
-    // Draw Studio LeFlow logo at top-right
-    drawContractLogo(doc);
+    // Draw professional contract header with logo
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
 
-    // Header
+    // Contract title
     doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRENOSU IMOVINSKIH AUTORSKIH PRAVA', { align: 'center' });
     doc.moveDown(2);
 
@@ -503,56 +533,53 @@ export function generateInstrumentalSalePDF(data: InstrumentalSaleContract): Pro
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
-    // Draw Studio LeFlow logo at top-right
-    drawContractLogo(doc);
+    // Draw professional contract header with logo
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
 
-    // Header
-    doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRODAJI INSTRUMENTALA', { align: 'center' });
+    // License title
+    doc.fontSize(14).font('DejaVuSans-Bold').text('LICENCA ZA KORIŠĆENJE INSTRUMENTALA', { align: 'center' });
     doc.moveDown(2);
 
-    // Contract metadata
+    // License metadata
     doc.fontSize(10).font('DejaVuSans')
-      .text(`Zaključen dana ${data.contractDate} godine u ${data.contractPlace}, između sledećih ugovornih strana:`, { align: 'left' });
-    doc.moveDown();
+      .text(`Izdata dana ${data.contractDate} godine u ${data.contractPlace}`, { align: 'left' });
+    doc.moveDown(2);
 
-    // Autor/Prodavac
-    doc.fontSize(11).font('DejaVuSans-Bold').text('1. Autor/Prodavac (Studio)');
+    // Autor/Prodavac (Studio)
+    doc.fontSize(11).font('DejaVuSans-Bold').text('Izdavač licence (Studio)');
     doc.fontSize(10).font('DejaVuSans');
     doc.text(`Ime i prezime / poslovno ime: ${data.authorName}`);
     doc.text(`Adresa: ${data.authorAddress}`);
-    doc.text(`Matični broj: ${data.authorMaticniBroj}`);
-    doc.moveDown();
+    doc.moveDown(2);
 
-    // Kupac
-    doc.fontSize(11).font('DejaVuSans-Bold').text('2. Kupac');
+    // Korisnik licence (Kupac)
+    doc.fontSize(11).font('DejaVuSans-Bold').text('Korisnik licence');
     doc.fontSize(10).font('DejaVuSans');
     doc.text(`Ime i prezime / poslovno ime: ${data.buyerName}`);
     doc.text(`Adresa: ${data.buyerAddress}`);
     doc.text(`Matični broj: ${data.buyerMaticniBroj}`);
-    doc.moveDown();
-
-    doc.fontSize(10).text('(u daljem tekstu zajednički: "Ugovorne strane").');
     doc.moveDown(2);
 
     // Član 1
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 1. Predmet ugovora', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 1. Predmet licence', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text('Predmet ovog ugovora je prodaja sledećeg muzičkog instrumentala:');
+    doc.text('Predmet ove licence je korišćenje sledećeg muzičkog instrumentala:');
     doc.moveDown(0.5);
     doc.text(`Naziv instrumentala: ${data.instrumentalName}`);
     doc.text(`Trajanje: ${data.duration}`);
     doc.moveDown(2);
 
     // Član 2
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 2. Vrsta prava', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 2. Vrsta licence', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text('Autor/Prodavac prenosi sledeća imovinska prava na instrumental:');
+    doc.text('Korisniku se izdaje sledeća vrsta licence:');
     doc.moveDown();
-    doc.text(data.rightsType === 'exclusive' ? '☑ Isključiva prava' : '☑ Neisključiva prava');
+    doc.text(data.rightsType === 'exclusive' ? '☑ Isključiva licenca' : '☑ Neisključiva licenca');
     doc.moveDown();
-    doc.text('Obuhvat prenosa prava:');
+    doc.text('Opseg dozvoljenog korišćenja:');
     if (data.rightsScope.reproduction) doc.text('☑ Reprodukovanje i umnožavanje');
     if (data.rightsScope.distribution) doc.text('☑ Distribucija i digitalna prodaja');
     if (data.rightsScope.performance) doc.text('☑ Javno izvođenje i emitovanje');
@@ -564,21 +591,21 @@ export function generateInstrumentalSalePDF(data: InstrumentalSaleContract): Pro
     doc.fontSize(12).font('DejaVuSans-Bold').text('Član 3. Teritorija korišćenja', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text(`Prenos prava odnosi se na teritoriju: ${data.territory}`);
+    doc.text(`Licenca se odnosi na teritoriju: ${data.territory}`);
     doc.moveDown(2);
 
     // Član 4
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 4. Trajanje prenosa prava', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 4. Trajanje licence', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text(`Prenos prava se zaključuje na period: ${data.durationPeriod}`);
+    doc.text(`Licenca se izdaje na period: ${data.durationPeriod}`);
     doc.moveDown(2);
 
     // Član 5
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 5. Naknada i uslovi plaćanja', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 5. Naknada za licencu', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text(`Ukupna naknada za prodaju instrumentala iznosi: ${data.totalAmount} RSD / EUR.`);
+    doc.text(`Ukupna naknada za licencu iznosi: ${data.totalAmount} RSD / EUR.`);
     doc.moveDown();
     doc.text('Raspored plaćanja:');
     doc.text(`– Avans: ${data.advancePayment} RSD / EUR`);
@@ -586,25 +613,25 @@ export function generateInstrumentalSalePDF(data: InstrumentalSaleContract): Pro
     doc.moveDown();
     doc.text(`Način plaćanja: ${data.paymentMethod}`);
     doc.moveDown();
-    doc.text('U slučaju neplaćanja u predviđenom roku, Autor/Prodavac zadržava pravo da instrumental ponudi trećim licima.');
+    doc.text('U slučaju neplaćanja u predviđenom roku, licenca postaje nevažeća.');
     doc.moveDown(2);
 
     // Član 6
     doc.fontSize(12).font('DejaVuSans-Bold').text('Član 6. Podela prihoda od korišćenja', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text('Ugovorne strane se saglasne da se prihod od korišćenja instrumentala deli na sledeći način:');
-    doc.text(`– Procenat prihoda koji pripada Autor/Prodavcu: ${data.authorPercentage}%`);
-    doc.text(`– Procenat prihoda koji pripada Kupcu: ${data.buyerPercentage}%`);
+    doc.text('Prihod od korišćenja instrumentala deli se na sledeći način:');
+    doc.text(`– Procenat prihoda koji pripada Izdavaču: ${data.authorPercentage}%`);
+    doc.text(`– Procenat prihoda koji pripada Korisniku: ${data.buyerPercentage}%`);
     doc.moveDown(2);
 
     // Član 7
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 7. Moralna prava', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 7. Autorska prava', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text('Autor zadržava moralna prava na delu, uključujući:');
+    doc.text('Izdavač zadržava sva autorska i moralna prava na instrumentalu, uključujući:');
     doc.text('– Pravo da bude priznat i označen kao autor instrumentala.');
-    doc.text('– Pravo da delo ne bude menjano bez njegove prethodne pisane saglasnosti.');
+    doc.text('– Pravo da instrumental ne bude menjan bez prethodne pisane saglasnosti.');
     doc.moveDown(2);
 
     // Član 8
@@ -615,23 +642,17 @@ export function generateInstrumentalSalePDF(data: InstrumentalSaleContract): Pro
     doc.moveDown(2);
 
     // Član 9
-    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 9. Završne odredbe', { align: 'center' });
+    doc.fontSize(12).font('DejaVuSans-Bold').text('Član 9. Važnost licence', { align: 'center' });
     doc.moveDown();
     doc.fontSize(10).font('DejaVuSans');
-    doc.text(`Ovaj ugovor je sačinjen u ${data.copies} istovetnih primeraka, od kojih svaka ugovorna strana zadržava po jedan.`);
+    doc.text(`Ova licenca je izdata u ${data.copies} primerka i stupa na snagu danom plaćanja naknade.`);
     doc.moveDown();
-    doc.text('Potpisivanjem ugovora strane potvrđuju da su saglasne sa svim odredbama i da ga zaključuju slobodnom voljom.');
+    doc.text('Korišćenjem instrumentala, Korisnik potvrđuje da prihvata sve uslove navedene u ovoj licenci.');
     doc.moveDown(3);
 
-    // Signatures
+    // Datum izdavanja
     doc.fontSize(10).font('DejaVuSans');
-    doc.text('____________________________', { align: 'left' });
-    doc.text('Autor/Prodavac', { align: 'left' });
-    doc.moveDown(2);
-    doc.text('____________________________', { align: 'left' });
-    doc.text('Kupac', { align: 'left' });
-    doc.moveDown(2);
-    doc.text(`Datum: ${data.finalDate}`, { align: 'center' });
+    doc.text(`Datum izdavanja: ${data.finalDate}`, { align: 'center' });
 
     doc.end();
   });
