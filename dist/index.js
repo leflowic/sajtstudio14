@@ -5023,6 +5023,9 @@ var vite_config_default = defineConfig({
           if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
             return "vendor-react";
           }
+          if (id.includes("node_modules/lucide-react") || id.includes("node_modules/react-icons")) {
+            return "vendor-icons";
+          }
           if (id.includes("node_modules/@radix-ui") || id.includes("components/ui")) {
             return "vendor-ui";
           }
@@ -5034,9 +5037,6 @@ var vite_config_default = defineConfig({
           }
           if (id.includes("node_modules/framer-motion")) {
             return "vendor-motion";
-          }
-          if (id.includes("node_modules/lucide-react") || id.includes("node_modules/react-icons")) {
-            return "vendor-icons";
           }
           if (id.includes("node_modules/@tiptap")) {
             return "vendor-editor";

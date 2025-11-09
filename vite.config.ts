@@ -49,11 +49,15 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // React core bundle
+          // React core bundle - MUST be first
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
             return 'vendor-react';
           }
-          // UI components bundle (shadcn, radix)
+          // Icons bundle - depends on React
+          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/react-icons')) {
+            return 'vendor-icons';
+          }
+          // UI components bundle (shadcn, radix) - depends on React
           if (id.includes('node_modules/@radix-ui') || id.includes('components/ui')) {
             return 'vendor-ui';
           }
@@ -68,10 +72,6 @@ export default defineConfig({
           // Animation libraries
           if (id.includes('node_modules/framer-motion')) {
             return 'vendor-motion';
-          }
-          // Icons bundle
-          if (id.includes('node_modules/lucide-react') || id.includes('node_modules/react-icons')) {
-            return 'vendor-icons';
           }
           // Rich text editor
           if (id.includes('node_modules/@tiptap')) {
