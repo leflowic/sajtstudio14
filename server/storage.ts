@@ -1493,6 +1493,10 @@ export class DatabaseStorage implements IStorage {
 
     // Extract number from format "NNN/YYYY"
     const parts = latestContract.contractNumber.split('/');
+    if (parts.length < 2 || !parts[0]) {
+      return `001/${yearSuffix}`;
+    }
+    
     const lastNumber = parseInt(parts[0]);
     const nextNumber = lastNumber + 1;
     

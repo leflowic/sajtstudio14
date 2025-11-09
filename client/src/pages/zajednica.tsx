@@ -29,7 +29,7 @@ type PublicSong = {
   hasVoted: boolean;
 };
 
-export default function Pesme() {
+export default function Zajednica() {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -77,9 +77,9 @@ export default function Pesme() {
   return (
     <>
       <SEO
-        title="Pesme Korisnika - Najbolje Pesme"
-        description="Glasajte za najbolje pesme koje su korisnici podelili na Studio LeFlow platformi"
-        keywords={["pesme", "muzika", "youtube", "glasanje", "studio leflow"]}
+        title="Zajednica - Top Pesme Korisnika"
+        description="Muzička zajednica Studio LeFlow - pogledajte i glasajte za najbolje pesme koje korisnici dele. Podržite talente i pokažite svoju omiljenu muziku!"
+        keywords={["zajednica", "top pesme", "muzika", "glasanje", "korisnici", "studio leflow", "community"]}
       />
 
       <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -94,10 +94,10 @@ export default function Pesme() {
               <div>
                 <h1 className="text-3xl font-bold tracking-tight mb-2 flex items-center gap-2">
                   <TrendingUp className="h-8 w-8" />
-                  Najbolje Pesme
+                  Muzička Zajednica
                 </h1>
                 <p className="text-muted-foreground">
-                  Glasajte za omiljene pesme koje su korisnici podelili
+                  Podeli svoju pesmu i glasaj za omiljene pesme iz zajednice
                 </p>
               </div>
               <Link href="/moje-pesme">
