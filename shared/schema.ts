@@ -57,6 +57,39 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Pending Users table - for unverified registrations
+// Users stay here until they verify their email, then they are moved to users table
+// NOTE: password is already hashed before insertion
+export const pendingUsers = pgTable("pending_users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(), // Pre-hashed password
+  username: text("username").notNull().unique(),
+  verificationCode: text("verification_code").notNull(),
+  ipAddress: text("ip_address").notNull(),
+  userAgent: text("user_agent"), // For fraud detection heuristics
+  termsAccepted: boolean("terms_accepted").notNull(), // No default - must be explicitly submitted
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(), // Auto-delete after 24 hours
+}, (table) => ({
+  // Composite index for faster cleanup queries
+  emailExpiresIdx: index("pending_users_email_expires_idx").on(table.email, table.expiresAt),
+}));
+
+// Registration Attempts table - for IP-based rate limiting and flood protection
+export const registrationAttempts = pgTable("registration_attempts", {
+  id: serial("id").primaryKey(),
+  ipAddress: text("ip_address").notNull(),
+  attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
+  email: text("email"), // Track which email was attempted for fraud detection
+  userAgent: text("user_agent"), // For bot detection
+}, (table) => ({
+  // Composite index for sliding-window rate limit queries
+  ipAttemptedIdx: index("registration_attempts_ip_attempted_idx").on(table.ipAddress, table.attemptedAt),
+  // Email index for fraud detection (same IP trying multiple emails)
+  emailIdx: index("registration_attempts_email_idx").on(table.email),
+}));
+
 // Projects table - for uploaded MP3s
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
