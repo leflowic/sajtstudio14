@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import notificationSound from "@assets/bottle-opening-wine-cork-pop-352701_1762664855578.mp3";
 
 export type WebSocketMessage = 
   | { type: 'online_status'; userId: number; online: boolean }
@@ -23,6 +24,7 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectTimeout = useRef<NodeJS.Timeout>();
   const messageListeners = useRef<Set<(message: WebSocketMessage) => void>>(new Set());
   const userRef = useRef(user); // Track current user to prevent stale reconnects
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const connect = useCallback(() => {
     // CRITICAL: Read from ref, not closure, to prevent stale reconnects
@@ -52,6 +54,26 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     ws.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
+        
+        // Play notification sound for new messages from other users
+        if (message.type === 'new_message') {
+          const currentUserId = userRef.current?.id;
+          const messageSenderId = message.message?.senderId;
+          
+          // Only play sound if message is from another user
+          if (currentUserId && messageSenderId && messageSenderId !== currentUserId) {
+            if (!audioRef.current) {
+              audioRef.current = new Audio(notificationSound);
+              audioRef.current.volume = 0.5; // 50% volume
+            }
+            
+            // Play notification sound
+            audioRef.current.play().catch((error) => {
+              console.log('[WebSocket] Could not play notification sound:', error);
+            });
+          }
+        }
+        
         messageListeners.current.forEach(listener => listener(message));
       } catch (error) {
         console.error('[WebSocket] Failed to parse message:', error);
