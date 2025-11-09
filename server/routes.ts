@@ -1233,6 +1233,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search users for admin (used in dropdowns/assignments)
+  app.get("/api/admin/users/search", requireAdmin, async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      if (!query || query.trim().length === 0) {
+        return res.json({ users: [] });
+      }
+
+      const users = await storage.adminSearchUsers(query.trim(), limit);
+      res.json({ users });
+    } catch (error) {
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
   // Ban a user
   app.post("/api/admin/users/:id/ban", requireAdmin, async (req, res) => {
     try {

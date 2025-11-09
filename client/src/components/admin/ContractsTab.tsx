@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,10 +14,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Download, Mail, Trash2, Music, Scale, DollarSign, UserPlus } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { FileText, Download, Mail, Trash2, Music, Scale, DollarSign, UserPlus, Check, ChevronsUpDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Contract {
   id: number;
@@ -39,12 +43,6 @@ export function ContractsTab() {
   // Contract history query
   const { data: contracts = [], isLoading: contractsLoading } = useQuery<Contract[]>({
     queryKey: ["/api/admin/contracts"],
-    enabled: activeTab === "history",
-  });
-
-  // Fetch all users for assignment dropdown
-  const { data: users = [] } = useQuery<any[]>({
-    queryKey: ["/api/admin/users"],
     enabled: activeTab === "history",
   });
 
@@ -236,7 +234,6 @@ export function ContractsTab() {
                                 contractNumber={contract.contractNumber}
                                 currentUserId={contract.userId}
                                 currentUsername={contract.username}
-                                users={users}
                                 onAssign={(userId) => assignUserMutation.mutate({ contractId: contract.id, userId })}
                                 isAssigning={assignUserMutation.isPending}
                               />
@@ -290,13 +287,12 @@ export function ContractsTab() {
   );
 }
 
-// Assign User Dialog Component
+// Assign User Dialog Component with async search
 function AssignUserDialog({
   contractId,
   contractNumber,
   currentUserId,
   currentUsername,
-  users,
   onAssign,
   isAssigning
 }: {
@@ -304,20 +300,44 @@ function AssignUserDialog({
   contractNumber: string;
   currentUserId: number | null;
   currentUsername: string | null;
-  users: any[];
   onAssign: (userId: number | null) => void;
   isAssigning: boolean;
 }) {
-  const [open, setOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(currentUserId);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const [selectedUser, setSelectedUser] = useState<{ id: number; username: string; email: string } | null>(
+    currentUserId && currentUsername ? { id: currentUserId, username: currentUsername, email: "" } : null
+  );
+
+  // Search users query
+  const { data: searchResults, isFetching } = useQuery<{ users: Array<{ id: number; username: string; email: string }> }>({
+    queryKey: ['/api/admin/users/search', debouncedSearchTerm],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/users/search?q=${encodeURIComponent(debouncedSearchTerm)}`);
+      if (!response.ok) throw new Error('Search failed');
+      return response.json();
+    },
+    enabled: popoverOpen && debouncedSearchTerm.length > 0,
+    staleTime: 30000,
+  });
+
+  const users = searchResults?.users || [];
+
+  const handleSelectUser = (user: { id: number; username: string; email: string } | null) => {
+    setSelectedUser(user);
+    setPopoverOpen(false);
+    setSearchTerm("");
+  };
 
   const handleAssign = () => {
-    onAssign(selectedUserId);
-    setOpen(false);
+    onAssign(selectedUser?.id || null);
+    setDialogOpen(false);
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DialogTrigger asChild>
         <Button
           variant="ghost"
@@ -343,25 +363,82 @@ function AssignUserDialog({
             </div>
           )}
           <div className="space-y-2">
-            <Label htmlFor="user-select">Korisnik</Label>
-            <select
-              id="user-select"
-              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-              value={selectedUserId || ""}
-              onChange={(e) => setSelectedUserId(e.target.value ? parseInt(e.target.value) : null)}
-              data-testid="select-contract-user"
-            >
-              <option value="">Nijedan (ukloni dodelu)</option>
-              {users.map((user: any) => (
-                <option key={user.id} value={user.id}>
-                  {user.username} ({user.email})
-                </option>
-              ))}
-            </select>
+            <Label>Korisnik</Label>
+            <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={popoverOpen}
+                  className="w-full justify-between"
+                  data-testid="select-contract-user"
+                >
+                  {selectedUser ? `${selectedUser.username}` : "Izaberite korisnika..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start">
+                <Command>
+                  <CommandInput 
+                    placeholder="Pretraži korisnike..." 
+                    value={searchTerm}
+                    onValueChange={setSearchTerm}
+                  />
+                  <CommandList>
+                    <CommandEmpty>
+                      {isFetching ? "Pretraga..." : "Nema rezultata"}
+                    </CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem
+                        key="null"
+                        value="null"
+                        onSelect={() => handleSelectUser(null)}
+                        data-testid="command-item-user-null"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedUser === null ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        Nijedan (ukloni dodelu)
+                      </CommandItem>
+                      {isFetching && searchTerm.length > 0 && (
+                        <CommandItem disabled>
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            Pretraga...
+                          </div>
+                        </CommandItem>
+                      )}
+                      {users.map((user) => (
+                        <CommandItem
+                          key={user.id}
+                          value={`${user.id}`}
+                          onSelect={() => handleSelectUser(user)}
+                          data-testid={`command-item-user-${user.id}`}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedUser?.id === user.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-medium">{user.username}</span>
+                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                          </div>
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setDialogOpen(false)}>
             Otkaži
           </Button>
           <Button

@@ -75,6 +75,7 @@ export interface IStorage {
   unbanUser(id: number): Promise<void>;
   acceptTerms(id: number): Promise<void>;
   getAllUsers(): Promise<User[]>;
+  adminSearchUsers(query: string, limit?: number): Promise<Array<{ id: number; username: string; email: string }>>;
   getAdminUsers(): Promise<User[]>;
   setVerificationCode(userId: number, code: string): Promise<void>;
   verifyEmail(userId: number, code: string): Promise<boolean>;
@@ -324,6 +325,28 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async adminSearchUsers(query: string, limit: number = 20): Promise<Array<{ id: number; username: string; email: string }>> {
+    const searchTerm = `%${query.toLowerCase()}%`;
+    
+    const results = await db
+      .select({
+        id: users.id,
+        username: users.username,
+        email: users.email,
+      })
+      .from(users)
+      .where(
+        or(
+          sql`LOWER(${users.username}) LIKE ${searchTerm}`,
+          sql`LOWER(${users.email}) LIKE ${searchTerm}`
+        )
+      )
+      .orderBy(users.username)
+      .limit(limit);
+
+    return results;
   }
 
   async getAdminUsers(): Promise<User[]> {
