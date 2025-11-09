@@ -102,6 +102,7 @@ export const projects = pgTable("projects", {
   votesCount: integer("votes_count").notNull().default(0),
   currentMonth: text("current_month").notNull(), // e.g., "2025-01" to track monthly limit
   approved: boolean("approved").notNull().default(false), // Admin must approve before project is visible
+  status: text("status").notNull().default("waiting"), // "waiting" | "in_progress" | "completed" | "cancelled"
 });
 
 // Votes table - for upvoting projects
@@ -668,3 +669,44 @@ export const instrumentalSaleContractDataSchema = z.object({
   copies: z.string().min(1, "Broj primeraka je obavezan"),
   finalDate: z.string().min(1, "Završni datum je obavezan"),
 });
+
+// Invoices table - for managing client invoices and payments
+export const invoices = pgTable("invoices", {
+  id: serial("id").primaryKey(),
+  invoiceNumber: varchar("invoice_number", { length: 20 }).notNull().unique(),
+  contractId: integer("contract_id").references(() => contracts.id), // Optional: link to contract
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }), // Client who receives the invoice
+  amount: text("amount").notNull(), // Amount as string to preserve decimal formatting
+  currency: varchar("currency", { length: 3 }).notNull().default("RSD"), // ISO currency code
+  status: text("status").notNull().default("pending"), // "pending" | "paid" | "overdue" | "cancelled"
+  description: text("description").notNull(), // What the invoice is for
+  issuedDate: timestamp("issued_date").defaultNow().notNull(),
+  dueDate: timestamp("due_date").notNull(), // Payment deadline
+  paidDate: timestamp("paid_date"), // When payment was received
+  createdBy: integer("created_by").notNull().references(() => users.id), // Admin who created the invoice
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Index for finding invoices by user
+  userIdx: index("invoices_user_idx").on(table.userId),
+  // Index for finding invoices by status
+  statusIdx: index("invoices_status_idx").on(table.status),
+  // Index for finding overdue invoices
+  dueDateIdx: index("invoices_due_date_idx").on(table.dueDate),
+}));
+
+export const insertInvoiceSchema = createInsertSchema(invoices).omit({
+  id: true,
+  createdAt: true,
+  issuedDate: true,
+}).extend({
+  invoiceNumber: z.string().min(1, "Broj fakture je obavezan"),
+  amount: z.string().min(1, "Iznos je obavezan"),
+  currency: z.string().length(3, "Valuta mora biti 3 karaktera (npr. RSD, EUR)").default("RSD"),
+  status: z.enum(["pending", "paid", "overdue", "cancelled"]).default("pending"),
+  description: z.string().min(1, "Opis je obavezan"),
+  dueDate: z.date().or(z.string()),
+  paidDate: z.date().or(z.string()).optional().nullable(),
+});
+
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+export type Invoice = typeof invoices.$inferSelect;
