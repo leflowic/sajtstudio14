@@ -563,14 +563,14 @@ function NewsletterTab() {
               </Suspense>
             </div>
           </div>
-          <div className="flex items-center justify-between pt-4">
-            <p className="text-sm text-muted-foreground">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pt-4">
+            <p className="text-sm text-muted-foreground text-center sm:text-left">
               Newsletter će biti poslat na {stats?.confirmed || 0} potvrđenih email adresa
             </p>
             <Button 
               onClick={handleSendNewsletter} 
               disabled={isSending || !subject.trim() || !htmlContent.trim()}
-              className="gap-2"
+              className="gap-2 w-full sm:w-auto"
             >
               <Send className="w-4 h-4" />
               {isSending ? "Slanje..." : "Pošalji Newsletter"}
@@ -581,13 +581,14 @@ function NewsletterTab() {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>Pretplatnici</CardTitle>
               <CardDescription>Lista svih email pretplatnika</CardDescription>
             </div>
-            <Button onClick={handleCopyAll} variant="outline" size="sm">
-              Kopiraj sve potvrđene email adrese
+            <Button onClick={handleCopyAll} variant="outline" size="sm" className="w-full sm:w-auto">
+              <span className="hidden sm:inline">Kopiraj sve potvrđene email adrese</span>
+              <span className="sm:hidden">Kopiraj sve</span>
             </Button>
           </div>
         </CardHeader>
