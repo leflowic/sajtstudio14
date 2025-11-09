@@ -98,5 +98,10 @@ export default defineConfig({
     hmr: {
       clientPort: 443,
     },
+    allowedHosts: [
+      '.replit.app',
+      '.repl.co',
+      'localhost',
+    ],
   },
 });
