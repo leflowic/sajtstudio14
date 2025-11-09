@@ -172,17 +172,17 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/80" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-20 text-center">
-          <div className="flex flex-col items-center gap-4 mb-6">
+          <div className="flex flex-col items-center gap-12 mb-6">
             {announcement?.isActive && announcement.message && (
               <motion.div 
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive/20 backdrop-blur-md border border-destructive/40 announcement-badge-shimmer"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-destructive/20 backdrop-blur-md border border-destructive/40 announcement-badge-shimmer max-w-md"
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.05 }}
                 data-testid="badge-site-announcement"
               >
-                <AlertCircle className="w-4 h-4 text-destructive" />
-                <span className="text-sm font-medium text-white">{announcement.message}</span>
+                <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                <span className="text-sm font-medium text-white text-center whitespace-pre-line">{announcement.message}</span>
               </motion.div>
             )}
 
