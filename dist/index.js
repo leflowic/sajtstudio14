@@ -5016,6 +5016,7 @@ var vite_config_default = defineConfig({
   build: {
     outDir: path3.resolve(__dirname, "dist", "public"),
     emptyOutDir: true,
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
