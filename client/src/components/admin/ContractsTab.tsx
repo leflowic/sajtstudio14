@@ -196,29 +196,26 @@ export function ContractsTab() {
                   <p>Još uvek nema kreiranih ugovora</p>
                 </div>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Broj</TableHead>
-                        <TableHead>Tip</TableHead>
-                        <TableHead>Dodeljen Korisniku</TableHead>
-                        <TableHead>Datum</TableHead>
-                        <TableHead className="text-right">Akcije</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {contracts.map((contract) => (
-                        <TableRow key={contract.id}>
-                          <TableCell className="font-medium">
-                            {contract.contractNumber}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="secondary">
-                              {getContractTypeLabel(contract.contractType)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
+                <>
+                  {/* Mobile Card Layout */}
+                  <div className="space-y-4 md:hidden">
+                    {contracts.map((contract) => (
+                      <Card key={contract.id}>
+                        <CardContent className="p-4 space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="space-y-1 flex-1 min-w-0">
+                              <div className="font-semibold text-sm">{contract.contractNumber}</div>
+                              <Badge variant="secondary" className="text-xs">
+                                {getContractTypeLabel(contract.contractType)}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-muted-foreground whitespace-nowrap">
+                              {format(new Date(contract.createdAt), "dd.MM.yyyy")}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 text-sm">
+                            <span className="text-muted-foreground">Korisnik:</span>
                             {contract.username ? (
                               <Badge variant="outline" className="text-xs">
                                 {contract.username}
@@ -226,62 +223,148 @@ export function ContractsTab() {
                             ) : (
                               <span className="text-xs text-muted-foreground">Nije dodeljen</span>
                             )}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {format(new Date(contract.createdAt), "dd.MM.yyyy")}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <AssignUserDialog
-                                contractId={contract.id}
-                                contractNumber={contract.contractNumber}
-                                currentUserId={contract.userId}
-                                currentUsername={contract.username}
-                                users={users}
-                                onAssign={(userId) => assignUserMutation.mutate({ contractId: contract.id, userId })}
-                                isAssigning={assignUserMutation.isPending}
-                              />
+                          </div>
 
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => window.open(`/api/admin/contracts/${contract.id}/download`, '_blank')}
-                                data-testid={`button-download-contract-${contract.id}`}
-                              >
-                                <Download className="w-4 h-4" />
-                              </Button>
+                          <div className="flex flex-wrap gap-2 pt-2 border-t">
+                            <AssignUserDialog
+                              contractId={contract.id}
+                              contractNumber={contract.contractNumber}
+                              currentUserId={contract.userId}
+                              currentUsername={contract.username}
+                              users={users}
+                              onAssign={(userId) => assignUserMutation.mutate({ contractId: contract.id, userId })}
+                              isAssigning={assignUserMutation.isPending}
+                            />
 
-                              <SendEmailDialog contractId={contract.id} contractNumber={contract.contractNumber} />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`/api/admin/contracts/${contract.id}/download`, '_blank')}
+                              data-testid={`button-download-contract-${contract.id}`}
+                              className="flex-1"
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Download
+                            </Button>
 
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button variant="ghost" size="sm" data-testid={`button-delete-contract-${contract.id}`}>
-                                    <Trash2 className="w-4 h-4 text-destructive" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Obriši Ugovor?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Da li ste sigurni da želite da obrišete ugovor {contract.contractNumber}?
-                                      Ova akcija se ne može poništiti.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Otkaži</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => deleteMutation.mutate(contract.id)}>
-                                      Obriši
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
+                            <SendEmailDialog contractId={contract.id} contractNumber={contract.contractNumber} />
+
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="sm" data-testid={`button-delete-contract-${contract.id}`}>
+                                  <Trash2 className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Obriši Ugovor?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Da li ste sigurni da želite da obrišete ugovor {contract.contractNumber}?
+                                    Ova akcija se ne može poništiti.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Otkaži</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteMutation.mutate(contract.id)}>
+                                    Obriši
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table Layout */}
+                  <div className="hidden md:block rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Broj</TableHead>
+                          <TableHead>Tip</TableHead>
+                          <TableHead>Dodeljen Korisniku</TableHead>
+                          <TableHead>Datum</TableHead>
+                          <TableHead className="text-right">Akcije</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {contracts.map((contract) => (
+                          <TableRow key={contract.id}>
+                            <TableCell className="font-medium">
+                              {contract.contractNumber}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary">
+                                {getContractTypeLabel(contract.contractType)}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {contract.username ? (
+                                <Badge variant="outline" className="text-xs">
+                                  {contract.username}
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Nije dodeljen</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">
+                              {format(new Date(contract.createdAt), "dd.MM.yyyy")}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <AssignUserDialog
+                                  contractId={contract.id}
+                                  contractNumber={contract.contractNumber}
+                                  currentUserId={contract.userId}
+                                  currentUsername={contract.username}
+                                  users={users}
+                                  onAssign={(userId) => assignUserMutation.mutate({ contractId: contract.id, userId })}
+                                  isAssigning={assignUserMutation.isPending}
+                                />
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => window.open(`/api/admin/contracts/${contract.id}/download`, '_blank')}
+                                  data-testid={`button-download-contract-${contract.id}`}
+                                >
+                                  <Download className="w-4 h-4" />
+                                </Button>
+
+                                <SendEmailDialog contractId={contract.id} contractNumber={contract.contractNumber} />
+
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="sm" data-testid={`button-delete-contract-${contract.id}`}>
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Obriši Ugovor?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Da li ste sigurni da želite da obrišete ugovor {contract.contractNumber}?
+                                        Ova akcija se ne može poništiti.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Otkaži</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => deleteMutation.mutate(contract.id)}>
+                                        Obriši
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </>
               )}
             </CardContent>
           </Card>
