@@ -30,6 +30,7 @@ const Settings = lazy(() => import("@/pages/settings"));
 const VideoSpots = lazy(() => import("@/pages/video-spots"));
 const Inbox = lazy(() => import("@/pages/inbox"));
 const MojePesme = lazy(() => import("@/pages/moje-pesme"));
+const Pesme = lazy(() => import("@/pages/pesme"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 const MaintenancePage = lazy(() => import("@/pages/maintenance"));
 const NewsletterConfirmation = lazy(() => import("@/pages/newsletter-confirmation"));
@@ -46,6 +47,7 @@ const LazyTermsOfUse = () => <TermsOfUse />;
 const LazyGiveaway = () => <Giveaway />;
 const LazyInbox = () => <Inbox />;
 const LazyMojePesme = () => <MojePesme />;
+const LazyPesme = () => <Pesme />;
 const LazyAdminPage = () => <AdminPage />;
 const LazySettings = () => <Settings />;
 const LazyNotFound = () => <NotFound />;
@@ -119,6 +121,7 @@ function Router() {
                 <Route path="/verify-email" component={LazyVerifyEmailPage} />
                 <Route path="/newsletter/potvrda/:token" component={LazyNewsletterConfirmation} />
                 <Route path="/uslovi-koriscenja" component={LazyTermsOfUse} />
+                <Route path="/pesme" component={LazyPesme} />
                 <ProtectedRoute path="/giveaway" component={LazyGiveaway} />
                 <ProtectedRoute path="/moje-pesme" component={LazyMojePesme} />
                 <ProtectedRoute path="/inbox" component={LazyInbox} />

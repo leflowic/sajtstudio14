@@ -1652,6 +1652,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GET /api/user-songs/public - PUBLIC (get all approved songs with voting info)
+  app.get("/api/user-songs/public", async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const songs = await storage.getApprovedUserSongs(userId);
+      res.json(songs);
+    } catch (error) {
+      console.error("Error fetching public user songs:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
+  // POST /api/user-songs/:id/vote - PROTECTED (toggle vote for a song)
+  app.post("/api/user-songs/:id/vote", requireVerifiedEmail, async (req, res) => {
+    try {
+      const songId = parseInt(req.params.id);
+      const userId = req.user!.id;
+      
+      if (isNaN(songId)) {
+        return res.status(400).json({ error: "Nevažeći ID" });
+      }
+      
+      const result = await storage.toggleUserSongVote(userId, songId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error toggling song vote:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
   // SEO routes - robots.txt
   app.get("/robots.txt", (req, res) => {
     const host = req.get('host') || 'localhost:5000';

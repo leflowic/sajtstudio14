@@ -36,6 +36,7 @@ import {
   cmsMedia,
   videoSpots,
   userSongs,
+  userSongVotes,
   newsletterSubscribers,
   conversations,
   messages,
@@ -145,9 +146,12 @@ export interface IStorage {
   getUserSongById(id: number): Promise<UserSong | undefined>;
   getUserSongs(userId: number): Promise<UserSong[]>;
   getAllUserSongs(): Promise<Array<UserSong & { username: string }>>;
+  getApprovedUserSongs(userId?: number): Promise<Array<UserSong & { username: string; hasVoted: boolean }>>;
   deleteUserSong(id: number): Promise<void>;
   approveUserSong(id: number): Promise<void>;
   getUserLastSongSubmissionTime(userId: number): Promise<Date | null>;
+  toggleUserSongVote(userId: number, songId: number): Promise<{ voted: boolean; votesCount: number }>;
+  hasUserVotedForSong(userId: number, songId: number): Promise<boolean>;
 
   // Messaging
   searchUsers(query: string, currentUserId: number): Promise<Array<{ id: number; username: string; email: string }>>;
@@ -866,6 +870,7 @@ export class DatabaseStorage implements IStorage {
         youtubeUrl: userSongs.youtubeUrl,
         submittedAt: userSongs.submittedAt,
         approved: userSongs.approved,
+        votesCount: userSongs.votesCount,
         username: users.username,
       })
       .from(userSongs)
@@ -898,6 +903,100 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return result?.submittedAt || null;
+  }
+
+  async getApprovedUserSongs(userId?: number): Promise<Array<UserSong & { username: string; hasVoted: boolean }>> {
+    const results = await db
+      .select({
+        id: userSongs.id,
+        userId: userSongs.userId,
+        songTitle: userSongs.songTitle,
+        artistName: userSongs.artistName,
+        youtubeUrl: userSongs.youtubeUrl,
+        submittedAt: userSongs.submittedAt,
+        approved: userSongs.approved,
+        votesCount: userSongs.votesCount,
+        username: users.username,
+        voteId: userId ? userSongVotes.id : sql<number | null>`NULL`,
+      })
+      .from(userSongs)
+      .leftJoin(users, eq(userSongs.userId, users.id))
+      .leftJoin(
+        userSongVotes,
+        userId 
+          ? and(eq(userSongVotes.songId, userSongs.id), eq(userSongVotes.userId, userId))
+          : sql`false`
+      )
+      .where(eq(userSongs.approved, true))
+      .orderBy(desc(userSongs.votesCount), desc(userSongs.submittedAt));
+    
+    return results.map(r => ({
+      id: r.id,
+      userId: r.userId,
+      songTitle: r.songTitle,
+      artistName: r.artistName,
+      youtubeUrl: r.youtubeUrl,
+      submittedAt: r.submittedAt,
+      approved: r.approved,
+      votesCount: r.votesCount,
+      username: r.username || "Unknown",
+      hasVoted: r.voteId !== null,
+    }));
+  }
+
+  async toggleUserSongVote(userId: number, songId: number): Promise<{ voted: boolean; votesCount: number }> {
+    return await db.transaction(async (tx) => {
+      // Check if user has already voted
+      const [existingVote] = await tx
+        .select()
+        .from(userSongVotes)
+        .where(and(eq(userSongVotes.userId, userId), eq(userSongVotes.songId, songId)));
+      
+      if (existingVote) {
+        // Remove vote (atomic decrement)
+        await tx
+          .delete(userSongVotes)
+          .where(eq(userSongVotes.id, existingVote.id));
+        
+        await tx
+          .update(userSongs)
+          .set({ votesCount: sql`${userSongs.votesCount} - 1` })
+          .where(eq(userSongs.id, songId));
+        
+        const [updated] = await tx
+          .select({ votesCount: userSongs.votesCount })
+          .from(userSongs)
+          .where(eq(userSongs.id, songId));
+        
+        return { voted: false, votesCount: updated?.votesCount || 0 };
+      } else {
+        // Add vote (atomic increment)
+        await tx
+          .insert(userSongVotes)
+          .values({ userId, songId });
+        
+        await tx
+          .update(userSongs)
+          .set({ votesCount: sql`${userSongs.votesCount} + 1` })
+          .where(eq(userSongs.id, songId));
+        
+        const [updated] = await tx
+          .select({ votesCount: userSongs.votesCount })
+          .from(userSongs)
+          .where(eq(userSongs.id, songId));
+        
+        return { voted: true, votesCount: updated?.votesCount || 1 };
+      }
+    });
+  }
+
+  async hasUserVotedForSong(userId: number, songId: number): Promise<boolean> {
+    const [result] = await db
+      .select()
+      .from(userSongVotes)
+      .where(and(eq(userSongVotes.userId, userId), eq(userSongVotes.songId, songId)));
+    
+    return !!result;
   }
 
   // Admin methods
