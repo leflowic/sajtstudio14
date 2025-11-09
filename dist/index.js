@@ -4118,6 +4118,9 @@ var vite_config_default = defineConfig({
     react(),
     runtimeErrorModal()
   ],
+  optimizeDeps: {
+    include: ["react", "react-dom"]
+  },
   css: {
     postcss: {
       plugins: [
@@ -4131,7 +4134,8 @@ var vite_config_default = defineConfig({
       "@": path3.resolve(__dirname, "client", "src"),
       "@shared": path3.resolve(__dirname, "shared"),
       "@assets": path3.resolve(__dirname, "attached_assets")
-    }
+    },
+    dedupe: ["react", "react-dom"]
   },
   root: path3.resolve(__dirname, "client"),
   build: {
@@ -4139,37 +4143,8 @@ var vite_config_default = defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("@radix-ui")) {
-              if (id.includes("dialog") || id.includes("dropdown") || id.includes("toast") || id.includes("popover")) {
-                return "vendor-ui-overlay";
-              }
-              if (id.includes("select") || id.includes("checkbox") || id.includes("radio") || id.includes("switch")) {
-                return "vendor-ui-forms";
-              }
-              return "vendor-ui-base";
-            }
-            if (id.includes("@tanstack/react-query")) {
-              return "vendor-query";
-            }
-            if (id.includes("lucide-react")) {
-              return "vendor-icons";
-            }
-            if (id.includes("@tiptap")) {
-              return "vendor-editor";
-            }
-            if (id.includes("recharts") || id.includes("d3-")) {
-              return "vendor-charts";
-            }
-            if (id.includes("framer-motion")) {
-              return "vendor-animation";
-            }
-            if (id.includes("react-dom") || id.includes("react/") || id.includes("react\\") || id.includes("scheduler") || id.includes("wouter")) {
-              return "vendor-react";
-            }
-            return "vendor-other";
-          }
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react/jsx-runtime"]
         }
       }
     },
