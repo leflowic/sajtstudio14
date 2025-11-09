@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Music, Mic2, Video, ArrowRight, CheckCircle2, Headphones } from "lucide-react";
+import { Music, Mic2, Video, ArrowRight, CheckCircle2, Headphones, Phone, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useQuery } from "@tanstack/react-query";
@@ -163,7 +163,7 @@ export default function Home() {
             className="w-full h-full object-cover scale-105 [filter:blur(6px)]"
           />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/65 to-black/65" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/80" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-20 text-center">
           <motion.div 
@@ -230,27 +230,25 @@ export default function Home() {
             <Link href="/kontakt">
               <Button 
                 size="lg" 
-                className="text-lg px-8 py-6 bg-primary hover:bg-primary border border-primary-border backdrop-blur-md transition-transform hover:scale-105"
+                className="text-lg px-8 py-6 bg-primary hover:bg-primary border border-primary-border backdrop-blur-md transition-transform hover:scale-105 font-semibold"
                 data-testid="button-book-session"
               >
+                <Phone className="mr-2 w-5 h-5" />
                 Zakažite Termin
                 <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="text-lg px-8 py-6 backdrop-blur-md bg-white/10 text-white border-white/30 hover:bg-white/20 transition-transform hover:scale-105"
-              data-testid="button-view-services"
-              onClick={() => {
-                const element = document.getElementById("usluge");
-                if (element) {
-                  element.scrollIntoView({ behavior: "smooth", block: "start" });
-                }
-              }}
-            >
-              Pogledajte Usluge
-            </Button>
+            <Link href="/projekti">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="text-lg px-8 py-6 backdrop-blur-md bg-white/10 text-white border-white/30 hover:bg-white/20 transition-transform hover:scale-105 font-semibold"
+                data-testid="button-view-projects"
+              >
+                <Play className="mr-2 w-5 h-5" />
+                Pogledaj Projekte
+              </Button>
+            </Link>
           </motion.div>
         </div>
         
@@ -260,7 +258,7 @@ export default function Home() {
       <section className="py-20 lg:py-32 bg-background" id="usluge">
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight" data-testid="text-services-title">
+            <h2 className="heading-lg mb-6" data-testid="text-services-title">
               Naše Usluge
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
@@ -275,7 +273,7 @@ export default function Home() {
                   whileHover={{ y: -8, scale: 1.02 }}
                   transition={{ duration: 0.3 }}
                 >
-                  <Card className="overflow-hidden h-full shadow-lg hover:shadow-2xl transition-shadow" data-testid={`card-service-${index}`}>
+                  <Card className="overflow-visible h-full hover-elevate active-elevate-2 cursor-pointer" data-testid={`card-service-${index}`}>
                     <div className="aspect-video overflow-hidden">
                       <motion.div
                         whileHover={{ scale: 1.1 }}
@@ -344,7 +342,7 @@ export default function Home() {
             
             <FadeInWhenVisible delay={0.2}>
               <div>
-                <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight" data-testid="text-why-choose-title">
+                <h2 className="heading-lg mb-6" data-testid="text-why-choose-title">
                   Zašto Izabrati Studio LeFlow?
                 </h2>
                 
@@ -385,14 +383,18 @@ export default function Home() {
       <section className="py-20 lg:py-32 bg-gradient-to-br from-primary/5 to-primary/10">
         <div className="max-w-4xl mx-auto px-4 md:px-6 text-center">
           <FadeInWhenVisible>
-            <h2 className="text-4xl md:text-5xl font-bold mb-6 tracking-tight">
+            <h2 className="heading-lg mb-6">
               Budite u Toku sa Najnovijim Novostima
             </h2>
           </FadeInWhenVisible>
           
           <FadeInWhenVisible delay={0.2}>
-            <p className="text-xl mb-12 text-muted-foreground max-w-2xl mx-auto">
-              Prijavite se na naš newsletter i budite prvi koji će saznati o novim projektima, promocijama i ekskluzivnim ponudama
+            <p className="text-xl mb-4 text-muted-foreground max-w-2xl mx-auto">
+              📨 Prijavite se na naš newsletter i budite prvi koji će saznati o novim projektima, promocijama i ekskluzivnim ponudama
+            </p>
+            <p className="text-sm text-muted-foreground/70 mb-12 flex items-center justify-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-primary" />
+              Nikada nećemo deliti vaš email sa trećim stranama
             </p>
           </FadeInWhenVisible>
           
@@ -406,7 +408,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 md:px-6">
           <FadeInWhenVisible>
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-4xl font-bold mb-4 tracking-tight">
+              <h2 className="heading-md mb-4">
                 Studio Oprema
               </h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">

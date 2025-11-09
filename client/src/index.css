@@ -397,3 +397,26 @@ html {
     to { opacity: 1; }
   }
 }
+
+/* Typography Scale - Consistent heading hierarchy */
+@layer components {
+  .heading-xl {
+    @apply text-5xl md:text-6xl lg:text-7xl font-black tracking-tight;
+  }
+  
+  .heading-lg {
+    @apply text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight;
+  }
+  
+  .heading-md {
+    @apply text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight;
+  }
+  
+  .heading-sm {
+    @apply text-2xl md:text-3xl font-semibold;
+  }
+  
+  .heading-xs {
+    @apply text-xl md:text-2xl font-semibold;
+  }
+}
