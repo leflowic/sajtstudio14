@@ -26,6 +26,8 @@ import {
   type AdminMessageAudit,
   type Contract,
   type InsertContract,
+  type PendingUser,
+  type RegistrationAttempt,
   contactSubmissions,
   users,
   projects,
@@ -43,6 +45,8 @@ import {
   messageReads,
   adminMessageAudit,
   contracts,
+  pendingUsers,
+  registrationAttempts,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -82,6 +86,20 @@ export interface IStorage {
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
   updateUserAvatar(userId: number, avatarUrl: string | null): Promise<void>;
   updateUserLastSeen(userId: number): Promise<void>;
+
+  // Pending Users (for email verification before full registration)
+  createPendingUser(data: { email: string; password: string; username: string; verificationCode: string; ipAddress: string; userAgent?: string; termsAccepted: boolean; expiresAt: Date }): Promise<PendingUser>;
+  getPendingUserByEmail(email: string): Promise<PendingUser | undefined>;
+  getPendingUserByUsername(username: string): Promise<PendingUser | undefined>;
+  getPendingUserByCode(code: string): Promise<PendingUser | undefined>;
+  deletePendingUser(id: number): Promise<void>;
+  movePendingToUsers(pendingUserId: number): Promise<User>;
+  cleanupExpiredPendingUsers(): Promise<number>; // Returns count of deleted records
+
+  // Registration Rate Limiting
+  createRegistrationAttempt(data: { ipAddress: string; email?: string; userAgent?: string }): Promise<RegistrationAttempt>;
+  getRecentRegistrationAttempts(ipAddress: string, minutesAgo: number): Promise<RegistrationAttempt[]>;
+  cleanupOldRegistrationAttempts(hoursAgo: number): Promise<number>; // Returns count of deleted records
 
   // Projects
   createProject(data: { title: string; description: string; genre: string; mp3Url: string; userId: number; currentMonth: string }): Promise<Project>;
@@ -384,6 +402,104 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserLastSeen(userId: number): Promise<void> {
     await db.update(users).set({ lastSeen: sql`now()` }).where(eq(users.id, userId));
+  }
+
+  // Pending Users - for email verification before full registration
+  async createPendingUser(data: { email: string; password: string; username: string; verificationCode: string; ipAddress: string; userAgent?: string; termsAccepted: boolean; expiresAt: Date }): Promise<PendingUser> {
+    const [pendingUser] = await db.insert(pendingUsers).values(data).returning();
+    if (!pendingUser) throw new Error("Failed to create pending user");
+    return pendingUser;
+  }
+
+  async getPendingUserByEmail(email: string): Promise<PendingUser | undefined> {
+    const results = await db.select().from(pendingUsers).where(sql`LOWER(${pendingUsers.email}) = LOWER(${email})`).limit(1);
+    return results[0];
+  }
+
+  async getPendingUserByUsername(username: string): Promise<PendingUser | undefined> {
+    const results = await db.select().from(pendingUsers).where(sql`LOWER(${pendingUsers.username}) = LOWER(${username})`).limit(1);
+    return results[0];
+  }
+
+  async getPendingUserByCode(code: string): Promise<PendingUser | undefined> {
+    const results = await db.select().from(pendingUsers).where(eq(pendingUsers.verificationCode, code)).limit(1);
+    return results[0];
+  }
+
+  async deletePendingUser(id: number): Promise<void> {
+    await db.delete(pendingUsers).where(eq(pendingUsers.id, id));
+  }
+
+  async movePendingToUsers(pendingUserId: number): Promise<User> {
+    // Use transaction to ensure atomicity
+    return await db.transaction(async (tx) => {
+      // Get pending user
+      const [pendingUser] = await tx.select().from(pendingUsers).where(eq(pendingUsers.id, pendingUserId));
+      if (!pendingUser) {
+        throw new Error("Pending user not found");
+      }
+
+      // Check if email or username already exists in users table (race condition protection)
+      const existingByEmail = await tx.select().from(users).where(sql`LOWER(${users.email}) = LOWER(${pendingUser.email})`).limit(1);
+      if (existingByEmail.length > 0) {
+        throw new Error("Email already registered");
+      }
+
+      const existingByUsername = await tx.select().from(users).where(sql`LOWER(${users.username}) = LOWER(${pendingUser.username})`).limit(1);
+      if (existingByUsername.length > 0) {
+        throw new Error("Username already taken");
+      }
+
+      // Create verified user
+      const [newUser] = await tx.insert(users).values({
+        email: pendingUser.email,
+        password: pendingUser.password, // Already hashed
+        username: pendingUser.username,
+        termsAccepted: pendingUser.termsAccepted,
+        emailVerified: true, // They verified via email
+        role: "user",
+        banned: false,
+      }).returning();
+      
+      if (!newUser) throw new Error("Failed to create user");
+
+      // Delete pending user
+      await tx.delete(pendingUsers).where(eq(pendingUsers.id, pendingUserId));
+
+      return newUser;
+    });
+  }
+
+  async cleanupExpiredPendingUsers(): Promise<number> {
+    const result = await db.delete(pendingUsers).where(sql`${pendingUsers.expiresAt} < now()`);
+    return result.rowCount || 0;
+  }
+
+  // Registration Rate Limiting
+  async createRegistrationAttempt(data: { ipAddress: string; email?: string; userAgent?: string }): Promise<RegistrationAttempt> {
+    const [attempt] = await db.insert(registrationAttempts).values(data).returning();
+    if (!attempt) throw new Error("Failed to create registration attempt");
+    return attempt;
+  }
+
+  async getRecentRegistrationAttempts(ipAddress: string, minutesAgo: number): Promise<RegistrationAttempt[]> {
+    return await db
+      .select()
+      .from(registrationAttempts)
+      .where(
+        and(
+          eq(registrationAttempts.ipAddress, ipAddress),
+          sql`${registrationAttempts.attemptedAt} > now() - interval '${sql.raw(minutesAgo.toString())} minutes'`
+        )
+      )
+      .orderBy(desc(registrationAttempts.attemptedAt));
+  }
+
+  async cleanupOldRegistrationAttempts(hoursAgo: number): Promise<number> {
+    const result = await db.delete(registrationAttempts).where(
+      sql`${registrationAttempts.attemptedAt} < now() - interval '${sql.raw(hoursAgo.toString())} hours'`
+    );
+    return result.rowCount || 0;
   }
 
   // Projects

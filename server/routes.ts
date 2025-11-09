@@ -336,41 +336,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email verification endpoint
+  // This endpoint verifies email for PENDING users and moves them to the users table
   app.post("/api/verify-email", async (req, res) => {
     try {
-      const { userId, code } = req.body;
+      const { code } = req.body;
       
-      if (!userId || !code) {
-        return res.status(400).json({ error: "userId i kod su obavezni" });
+      if (!code) {
+        return res.status(400).json({ error: "Verifikacioni kod je obavezan" });
       }
       
-      const isValid = await storage.verifyEmail(userId, code);
+      // Find pending user by verification code
+      const pendingUser = await storage.getPendingUserByCode(code);
       
-      if (!isValid) {
-        return res.status(400).json({ error: "Nevažeći ili istekao verifikacioni kod" });
+      if (!pendingUser) {
+        return res.status(400).json({ error: "Nevažeći verifikacioni kod" });
       }
       
-      // Now log the user in after successful verification
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ error: "Korisnik nije pronađen" });
+      // Check if pending user has expired (24 hours)
+      if (new Date() > new Date(pendingUser.expiresAt)) {
+        // Delete expired pending user
+        await storage.deletePendingUser(pendingUser.id);
+        return res.status(400).json({ 
+          error: "Verifikacioni kod je istekao. Molimo registrujte se ponovo." 
+        });
       }
       
-      // SECURITY: Check if user is banned before logging them in
+      // Move pending user to users table (atomic transaction with race condition protection)
+      let user;
+      try {
+        user = await storage.movePendingToUsers(pendingUser.id);
+      } catch (moveError: any) {
+        console.error("[VERIFY] Failed to move pending user to users:", moveError);
+        
+        // Check if error is due to duplicate email/username
+        if (moveError.message.includes("already")) {
+          return res.status(400).json({ error: moveError.message });
+        }
+        
+        return res.status(500).json({ error: "Greška pri kreiranju naloga" });
+      }
+      
+      console.log(`[VERIFY] Successfully created and verified user ${user.username} (id: ${user.id})`);
+      
+      // SECURITY: Check if user is banned before logging them in (paranoid check)
       if (user.banned) {
         return res.status(403).json({ error: "Vaš nalog je banovan" });
       }
       
+      // Log the user in automatically after successful verification
       req.login(user, (err) => {
         if (err) {
+          console.error("[VERIFY] Login error after verification:", err);
           return res.status(500).json({ error: "Greška pri prijavljivanju" });
         }
         
         // SECURITY: Don't expose password hash
-        const { password, verificationCode, ...userWithoutPassword } = user;
+        const { password, ...userWithoutPassword } = user;
         res.json({ success: true, user: userWithoutPassword });
       });
     } catch (error) {
+      console.error("[VERIFY] Verification error:", error);
       res.status(500).json({ error: "Greška na serveru" });
     }
   });

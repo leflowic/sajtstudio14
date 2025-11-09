@@ -99,6 +99,19 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
+      // Get IP address and user agent for rate limiting and fraud detection
+      const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
+      const userAgent = req.headers["user-agent"] || undefined;
+
+      // IP RATE LIMITING: Check if this IP has made too many registration attempts recently
+      const recentAttempts = await storage.getRecentRegistrationAttempts(ipAddress, 15); // Last 15 minutes
+      if (recentAttempts.length >= 3) {
+        console.log(`[AUTH] IP rate limit exceeded for ${ipAddress}: ${recentAttempts.length} attempts in last 15 minutes`);
+        return res.status(429).json({ 
+          error: "Previše pokušaja registracije. Molimo sačekajte 15 minuta i pokušajte ponovo." 
+        });
+      }
+
       // Validate with Zod schema from shared/schema.ts
       const { insertUserSchema } = await import("@shared/schema");
       const validatedData = insertUserSchema.parse(req.body);
@@ -106,7 +119,15 @@ export function setupAuth(app: Express) {
       // Normalize email and username to lowercase for consistency
       const normalizedEmail = validatedData.email.toLowerCase();
       const normalizedUsername = validatedData.username.toLowerCase();
+
+      // Log registration attempt for rate limiting
+      await storage.createRegistrationAttempt({
+        ipAddress,
+        email: normalizedEmail,
+        userAgent,
+      });
       
+      // Check if email or username already exists in USERS table (verified users)
       const existingUser = await storage.getUserByUsername(normalizedUsername);
       if (existingUser) {
         return res.status(400).send("Korisničko ime već postoji");
@@ -117,19 +138,44 @@ export function setupAuth(app: Express) {
         return res.status(400).send("Email adresa već postoji");
       }
 
-      const user = await storage.createUser({
-        ...validatedData,
+      // Check if email or username already exists in PENDING_USERS table (awaiting verification)
+      const pendingUserByEmail = await storage.getPendingUserByEmail(normalizedEmail);
+      if (pendingUserByEmail) {
+        return res.status(400).json({ 
+          error: "Email adresa već postoji. Molimo proverite vaš inbox za verifikacioni kod ili sačekajte da prethodni zahtev istekne." 
+        });
+      }
+
+      const pendingUserByUsername = await storage.getPendingUserByUsername(normalizedUsername);
+      if (pendingUserByUsername) {
+        return res.status(400).json({ 
+          error: "Korisničko ime već postoji. Molimo odaberite drugo korisničko ime ili sačekajte da prethodni zahtev istekne." 
+        });
+      }
+
+      // Generate verification code
+      const verificationCode = generateVerificationCode();
+
+      // Hash password BEFORE storing in pending_users
+      const hashedPassword = await hashPassword(validatedData.password);
+
+      // Create PENDING user (NOT in users table yet!)
+      // User will be moved to users table only after email verification
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // Expires in 24 hours
+      const pendingUser = await storage.createPendingUser({
         email: normalizedEmail,
         username: normalizedUsername,
-        password: await hashPassword(validatedData.password),
+        password: hashedPassword, // Already hashed
+        verificationCode,
+        ipAddress,
+        userAgent,
+        termsAccepted: validatedData.termsAccepted,
+        expiresAt,
       });
 
-      // Generate verification code and save it
-      const verificationCode = generateVerificationCode();
-      await storage.setVerificationCode(user.id, verificationCode);
-
+      console.log(`[AUTH] Created pending user (id: ${pendingUser.id}) for ${normalizedEmail}`);
       console.log(`[AUTH] Attempting to send verification email to: ${validatedData.email}`);
-      console.log(`[AUTH] Verification code generated: ${verificationCode}`)
+      console.log(`[AUTH] Verification code generated: ${verificationCode}`);
 
       try {
         const result = await sendEmail({
@@ -143,7 +189,7 @@ export function setupAuth(app: Express) {
               <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 30px 0; border-radius: 8px;">
                 <h1 style="color: #7c3aed; font-size: 36px; letter-spacing: 8px; margin: 0;">${verificationCode}</h1>
               </div>
-              <p>Ovaj kod ističe za 15 minuta.</p>
+              <p>Ovaj kod ističe za 24 sata.</p>
               <p>Ako niste kreirali nalog, ignorišite ovaj email.</p>
               <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
               <p style="color: #666; font-size: 12px;">Studio LeFlow - Profesionalna Muzička Produkcija</p>
@@ -155,22 +201,26 @@ export function setupAuth(app: Express) {
         console.error("[AUTH] Failed to send verification email:", emailError);
         console.error("[AUTH] Email error details:", emailError.message);
         
-        // Delete the user since we couldn't send the verification email
-        await storage.deleteUser(user.id);
+        // Delete the pending user since we couldn't send the verification email
+        await storage.deletePendingUser(pendingUser.id);
         
         return res.status(500).json({ 
           error: "Greška pri slanju verifikacionog email-a. Molimo proverite da li je email adresa ispravna i pokušajte ponovo." 
         });
       }
 
-      // Don't log the user in yet - they need to verify email first
-      // SECURITY: Don't expose password hash or verification code
-      const { password, verificationCode: _, ...userWithoutSensitiveData } = user;
-      res.status(201).json(userWithoutSensitiveData);
+      // Return success response WITHOUT sensitive data
+      // User is NOT logged in yet - they must verify email first
+      res.status(201).json({ 
+        message: "Registracija uspešna! Proverite vaš email za verifikacioni kod.",
+        email: normalizedEmail,
+        username: normalizedUsername,
+      });
     } catch (error: any) {
       if (error.name === "ZodError") {
         return res.status(400).json({ error: "Validacija nije uspela", details: error.errors });
       }
+      console.error("[AUTH] Registration error:", error);
       res.status(500).send(error.message);
     }
   });

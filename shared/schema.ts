@@ -381,6 +381,33 @@ export const insertUserSchema = createInsertSchema(users).omit({
   }),
 });
 
+export const insertPendingUserSchema = createInsertSchema(pendingUsers).omit({
+  id: true,
+  createdAt: true,
+  expiresAt: true,
+  verificationCode: true,
+}).extend({
+  email: z.string().email("Unesite validnu email adresu"),
+  password: z.string().min(8, "Lozinka mora imati najmanje 8 karaktera"),
+  username: z.string().min(3, "Korisničko ime mora imati najmanje 3 karaktera"),
+  termsAccepted: z.boolean({
+    required_error: "Morate prihvatiti uslove korišćenja",
+  }).refine((val) => val === true, {
+    message: "Morate prihvatiti uslove korišćenja",
+  }),
+  ipAddress: z.string().min(1, "IP adresa je obavezna"),
+  userAgent: z.string().optional(),
+});
+
+export const insertRegistrationAttemptSchema = createInsertSchema(registrationAttempts).omit({
+  id: true,
+  attemptedAt: true,
+}).extend({
+  ipAddress: z.string().min(1, "IP adresa je obavezna"),
+  email: z.string().email("Unesite validnu email adresu").optional(),
+  userAgent: z.string().optional(),
+});
+
 export const insertProjectSchema = createInsertSchema(projects).omit({
   id: true,
   uploadDate: true,
@@ -405,6 +432,12 @@ export const insertCommentSchema = createInsertSchema(comments).omit({
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+
+export type InsertPendingUser = z.infer<typeof insertPendingUserSchema>;
+export type PendingUser = typeof pendingUsers.$inferSelect;
+
+export type InsertRegistrationAttempt = z.infer<typeof insertRegistrationAttemptSchema>;
+export type RegistrationAttempt = typeof registrationAttempts.$inferSelect;
 
 export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Project = typeof projects.$inferSelect;

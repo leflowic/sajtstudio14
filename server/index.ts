@@ -260,6 +260,35 @@ app.use((req, res, next) => {
       process.exit(1);
     });
 
+    // ===== CLEANUP JOBS FOR REGISTRATION ABUSE PROTECTION =====
+    // Run cleanup every hour to remove expired pending users and old registration attempts
+    const CLEANUP_INTERVAL = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    const runCleanup = async () => {
+      try {
+        // Cleanup expired pending users (older than 24 hours)
+        const expiredPending = await storage.cleanupExpiredPendingUsers();
+        if (expiredPending > 0) {
+          log(`[CLEANUP] Deleted ${expiredPending} expired pending users`);
+        }
+
+        // Cleanup old registration attempts (older than 1 hour)
+        const oldAttempts = await storage.cleanupOldRegistrationAttempts(1);
+        if (oldAttempts > 0) {
+          log(`[CLEANUP] Deleted ${oldAttempts} old registration attempts`);
+        }
+      } catch (error) {
+        console.error('[CLEANUP] Error during cleanup job:', error);
+      }
+    };
+
+    // Run cleanup immediately on startup
+    runCleanup();
+
+    // Schedule cleanup to run every hour
+    setInterval(runCleanup, CLEANUP_INTERVAL);
+    log(`[CLEANUP] Scheduled cleanup job to run every ${CLEANUP_INTERVAL / 1000 / 60} minutes`);
+
     // ===== WEBSOCKET SERVER FOR REAL-TIME MESSAGING =====
     const wss = new WebSocketServer({ server, path: '/api/ws' });
 
