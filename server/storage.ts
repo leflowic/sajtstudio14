@@ -902,7 +902,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(userSongs.submittedAt))
       .limit(1);
     
-    return result?.submittedAt || null;
+    if (!result?.submittedAt) {
+      return null;
+    }
+    
+    return new Date(result.submittedAt);
   }
 
   async getApprovedUserSongs(userId?: number): Promise<Array<UserSong & { username: string; hasVoted: boolean }>> {
