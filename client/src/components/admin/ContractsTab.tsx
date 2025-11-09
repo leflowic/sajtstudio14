@@ -200,8 +200,7 @@ export function ContractsTab() {
                   {/* Mobile Card Layout */}
                   <div className="space-y-4 md:hidden">
                     {contracts.map((contract) => (
-                      <Card key={contract.id}>
-                        <CardContent className="p-4 space-y-3">
+                      <div key={contract.id} className="rounded-md border bg-card p-4 space-y-3">
                           <div className="flex items-start justify-between gap-2">
                             <div className="space-y-1 flex-1 min-w-0">
                               <div className="font-semibold text-sm">{contract.contractNumber}</div>
@@ -272,8 +271,7 @@ export function ContractsTab() {
                               </AlertDialogContent>
                             </AlertDialog>
                           </div>
-                        </CardContent>
-                      </Card>
+                        </div>
                     ))}
                   </div>
 
