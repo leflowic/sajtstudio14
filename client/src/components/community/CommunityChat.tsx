@@ -18,6 +18,17 @@ import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
 type CommunityMessageWithUser = {
@@ -365,6 +376,26 @@ export function CommunityChat() {
     },
   });
 
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", "/api/community-chat/clear", {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/community-chat"] });
+      toast({
+        title: "Uspešno",
+        description: "Sve poruke su obrisane",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Greška",
+        description: error.message || "Nije moguće obrisati sve poruke",
+        variant: "destructive",
+      });
+    },
+  });
+
   useEffect(() => {
     const unsubscribe = subscribe((message) => {
       if (message.type === "community-chat:new") {
@@ -379,6 +410,8 @@ export function CommunityChat() {
         setTimeout(() => scrollToBottom(true), 100);
       } else if (message.type === "community-chat:delete") {
         setMessages((prev) => prev.filter((m) => m.id !== message.messageId));
+      } else if (message.type === "community-chat:clear") {
+        setMessages([]);
       }
     });
 
@@ -399,6 +432,10 @@ export function CommunityChat() {
 
   const handleDelete = (messageId: number) => {
     deleteMutation.mutate(messageId);
+  };
+
+  const handleClearAll = () => {
+    clearAllMutation.mutate();
   };
 
   if (!user) {
@@ -430,14 +467,52 @@ export function CommunityChat() {
               Razgovarajte u real-time sa drugim članovima zajednice Studio LeFlow
             </CardDescription>
           </div>
-          <Badge variant="secondary" className="gap-1.5">
-            <UserIcon className="h-3 w-3" />
-            {messages.length} {
-              messages.length === 1 ? 'poruka' : 
-              messages.length >= 2 && messages.length <= 4 ? 'poruke' : 
-              'poruka'
-            }
-          </Badge>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Badge variant="secondary" className="gap-1.5">
+              <UserIcon className="h-3 w-3" />
+              {messages.length} {
+                messages.length === 1 ? 'poruka' : 
+                messages.length >= 2 && messages.length <= 4 ? 'poruke' : 
+                'poruka'
+              }
+            </Badge>
+            {isAdmin && messages.length > 0 && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-2"
+                    data-testid="button-clear-all-messages"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Obriši Sve Poruke
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Da li ste sigurni?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Ova akcija će trajno obrisati SVE poruke iz chata zajednice. 
+                      Ova radnja ne može biti poništena.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel data-testid="button-cancel-clear">
+                      Otkaži
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={handleClearAll}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      data-testid="button-confirm-clear"
+                    >
+                      Obriši Sve
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-6 space-y-6">

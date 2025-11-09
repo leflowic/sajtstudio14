@@ -219,6 +219,7 @@ export interface IStorage {
   createCommunityMessage(userId: number, message: string): Promise<CommunityMessage>;
   getCommunityMessages(limit?: number): Promise<Array<CommunityMessage & { username: string; rank: string; avatarUrl: string | null }>>;
   deleteCommunityMessage(messageId: number, userId: number): Promise<boolean>;
+  clearAllCommunityMessages(): Promise<void>;
   canUserSendMessage(userId: number): Promise<boolean>;
   updateUserRank(userId: number, rank: string): Promise<void>;
 
@@ -2241,6 +2242,15 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting community message:', error);
       return false;
+    }
+  }
+
+  async clearAllCommunityMessages(): Promise<void> {
+    try {
+      await db.delete(communityMessages);
+    } catch (error) {
+      console.error('Error clearing all community messages:', error);
+      throw new Error('Failed to clear all community messages');
     }
   }
 

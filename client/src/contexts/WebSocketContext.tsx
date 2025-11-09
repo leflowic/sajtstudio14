@@ -12,7 +12,8 @@ export type WebSocketMessage =
   | { type: 'message_deleted'; messageId: number }
   | { type: 'notification'; title: string; description?: string; variant?: 'default' | 'destructive' }
   | { type: 'community-chat:new'; message: any }
-  | { type: 'community-chat:delete'; messageId: number };
+  | { type: 'community-chat:delete'; messageId: number }
+  | { type: 'community-chat:clear' };
 
 interface WebSocketContextType {
   isConnected: boolean;

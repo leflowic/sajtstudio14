@@ -1965,6 +1965,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DELETE /api/community-chat/clear - Clear all community messages (ADMIN only)
+  app.delete("/api/community-chat/clear", requireAdmin, async (req, res) => {
+    try {
+      await storage.clearAllCommunityMessages();
+      
+      // Broadcast clear to all online users
+      const onlineUsers = getOnlineUsersSnapshot();
+      if (wsHelpers.broadcastToUser) {
+        onlineUsers.forEach(userId => {
+          wsHelpers.broadcastToUser!(userId, {
+            type: "community-chat:clear"
+          });
+        });
+      }
+      
+      res.json({ success: true, message: "Sve poruke su obrisane" });
+    } catch (error) {
+      console.error("Error clearing community messages:", error);
+      res.status(500).json({ error: "Greška na serveru" });
+    }
+  });
+
   // SEO routes - robots.txt
   app.get("/robots.txt", (req, res) => {
     const host = req.get('host') || 'localhost:5000';
