@@ -157,11 +157,27 @@ export const userSongs = pgTable("user_songs", {
   youtubeUrl: text("youtube_url").notNull().unique(), // Duplicate protection
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
   approved: boolean("approved").notNull().default(false), // Admin must approve
+  votesCount: integer("votes_count").notNull().default(0), // Cached vote count for sorting
 }, (table) => ({
   // Index for efficient rate limiting queries (find user's last submission)
   userSubmittedIdx: index("user_songs_user_submitted_idx").on(table.userId, table.submittedAt),
   // Index for fetching approved songs
   approvedIdx: index("user_songs_approved_idx").on(table.approved),
+  // Index for sorting by votes
+  votesCountIdx: index("user_songs_votes_count_idx").on(table.votesCount),
+}));
+
+// User Song Votes table - for voting on user-submitted songs
+export const userSongVotes = pgTable("user_song_votes", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  songId: integer("song_id").notNull().references(() => userSongs.id, { onDelete: "cascade" }),
+  votedAt: timestamp("voted_at").defaultNow().notNull(),
+}, (table) => ({
+  // Prevent duplicate votes: user can only vote once per song
+  uniqueUserSong: unique().on(table.userId, table.songId),
+  // Performance index for counting votes per song
+  songIdx: index("user_song_votes_song_idx").on(table.songId),
 }));
 
 // Newsletter Subscribers table - for email subscriptions
