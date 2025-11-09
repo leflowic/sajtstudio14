@@ -1837,6 +1837,31 @@ Sitemap: ${siteUrl}/sitemap.xml
     }
   });
 
+  // Export conversation to TXT file
+  app.get("/api/admin/messages/export/:user1Id/:user2Id", requireAdmin, async (req, res) => {
+    try {
+      const user1Id = parseInt(req.params.user1Id);
+      const user2Id = parseInt(req.params.user2Id);
+
+      if (isNaN(user1Id) || isNaN(user2Id)) {
+        return res.status(400).json({ error: "Nevažeći ID korisnika" });
+      }
+
+      const txtContent = await storage.adminExportConversation(user1Id, user2Id);
+
+      const user1 = await storage.getUser(user1Id);
+      const user2 = await storage.getUser(user2Id);
+      const filename = `konverzacija_${user1?.username}_${user2?.username}_${Date.now()}.txt`;
+
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(txtContent);
+    } catch (error: any) {
+      console.error("[ADMIN MESSAGING] Export conversation error:", error);
+      res.status(500).json({ error: "Greška pri izvozu konverzacije" });
+    }
+  });
+
   // Get messaging statistics
   app.get("/api/admin/messages/stats", requireAdmin, async (req, res) => {
     try {

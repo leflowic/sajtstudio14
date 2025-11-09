@@ -149,6 +149,7 @@ export interface IStorage {
   adminDeleteMessage(messageId: number): Promise<boolean>;
   adminLogConversationView(adminId: number, viewedUser1Id: number, viewedUser2Id: number): Promise<void>;
   adminGetAuditLogs(): Promise<Array<AdminMessageAudit & { adminUsername: string; user1Username: string; user2Username: string }>>;
+  adminExportConversation(user1Id: number, user2Id: number): Promise<string>;
   adminGetMessagingStats(): Promise<{ totalMessages: number; totalConversations: number; deletedMessages: number; activeConversations: number }>;
 
   // Session store
@@ -1175,6 +1176,63 @@ export class DatabaseStorage implements IStorage {
     );
 
     return results;
+  }
+
+  async adminExportConversation(user1Id: number, user2Id: number): Promise<string> {
+    const [smallerId, largerId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+
+    const conversation = await db
+      .select()
+      .from(conversations)
+      .where(
+        and(
+          eq(conversations.user1Id, smallerId),
+          eq(conversations.user2Id, largerId)
+        )
+      )
+      .limit(1);
+
+    if (!conversation[0]) {
+      throw new Error("Conversation not found");
+    }
+
+    const user1 = await db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, user1Id))
+      .limit(1);
+
+    const user2 = await db
+      .select({ username: users.username })
+      .from(users)
+      .where(eq(users.id, user2Id))
+      .limit(1);
+
+    if (!user1[0] || !user2[0]) {
+      throw new Error("Users not found");
+    }
+
+    const msgs = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.conversationId, conversation[0].id))
+      .orderBy(messages.createdAt);
+
+    let txtContent = `Konverzacija između: ${user1[0].username} i ${user2[0].username}\n`;
+    txtContent += `Datum izvoza: ${new Date().toLocaleString("sr-RS")}\n`;
+    txtContent += `Ukupno poruka: ${msgs.length}\n`;
+    txtContent += `\n${"=".repeat(60)}\n\n`;
+
+    for (const msg of msgs) {
+      const senderUsername = msg.senderId === user1Id ? user1[0].username : user2[0].username;
+      const timestamp = new Date(msg.createdAt).toLocaleString("sr-RS");
+      const deletedSuffix = msg.deleted ? " (OBRISANA)" : "";
+      const content = msg.deleted ? "[Poruka obrisana]" : msg.content;
+      
+      txtContent += `[${timestamp}] ${senderUsername}: ${content}${deletedSuffix}\n`;
+    }
+
+    return txtContent;
   }
 
   async adminGetMessagingStats(): Promise<{ totalMessages: number; totalConversations: number; deletedMessages: number; activeConversations: number }> {

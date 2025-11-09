@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye, Search } from "lucide-react";
+import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye, Search, Download } from "lucide-react";
 import { format } from "date-fns";
 import type { User, CmsContent, InsertCmsContent } from "@shared/schema";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -853,13 +853,29 @@ function MessagesTab() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-primary" />
-              <CardTitle>
-                {selectedConversation
-                  ? `${selectedConversation.user1Username} i ${selectedConversation.user2Username} - Konverzacija`
-                  : "Pregled Poruka"}
-              </CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-primary" />
+                <CardTitle>
+                  {selectedConversation
+                    ? `${selectedConversation.user1Username} i ${selectedConversation.user2Username} - Konverzacija`
+                    : "Pregled Poruka"}
+                </CardTitle>
+              </div>
+              {selectedConversation && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const url = `/api/admin/messages/export/${selectedConversation.user1Id}/${selectedConversation.user2Id}`;
+                    window.open(url, '_blank');
+                  }}
+                  data-testid="button-export-conversation"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Izvezi
+                </Button>
+              )}
             </div>
             {selectedConversation ? (
               <CardDescription>
