@@ -2140,14 +2140,32 @@ export class DatabaseStorage implements IStorage {
         throw new Error('Možete slati poruke samo jednom na 10 sekundi');
       }
 
-      const [newMessage] = await db
-        .insert(communityMessages)
-        .values({ userId, message })
-        .returning();
+      const newMessage = await db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(communityMessages)
+          .values({ userId, message })
+          .returning();
 
-      if (!newMessage) {
-        throw new Error('Failed to create community message');
-      }
+        if (!inserted) {
+          throw new Error('Failed to create community message');
+        }
+
+        const messagesToKeep = await tx
+          .select({ id: communityMessages.id })
+          .from(communityMessages)
+          .orderBy(desc(communityMessages.createdAt))
+          .limit(20);
+
+        const idsToKeep = messagesToKeep.map(m => m.id);
+
+        if (idsToKeep.length > 0) {
+          await tx
+            .delete(communityMessages)
+            .where(sql`${communityMessages.id} NOT IN ${idsToKeep}`);
+        }
+
+        return inserted;
+      });
 
       return newMessage;
     } catch (error) {
@@ -2160,7 +2178,7 @@ export class DatabaseStorage implements IStorage {
 
   async getCommunityMessages(limit?: number): Promise<Array<CommunityMessage & { username: string; rank: string; avatarUrl: string | null }>> {
     try {
-      const effectiveLimit = Math.min(limit || 100, 200);
+      const effectiveLimit = Math.min(limit || 20, 20);
 
       const results = await db
         .select({
