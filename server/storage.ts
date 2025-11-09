@@ -2150,19 +2150,14 @@ export class DatabaseStorage implements IStorage {
           throw new Error('Failed to create community message');
         }
 
-        const messagesToKeep = await tx
-          .select({ id: communityMessages.id })
-          .from(communityMessages)
-          .orderBy(desc(communityMessages.createdAt))
-          .limit(20);
-
-        const idsToKeep = messagesToKeep.map(m => m.id);
-
-        if (idsToKeep.length > 0) {
-          await tx
-            .delete(communityMessages)
-            .where(notInArray(communityMessages.id, idsToKeep));
-        }
+        await tx.execute(sql`
+          DELETE FROM community_messages
+          WHERE id IN (
+            SELECT id FROM community_messages
+            ORDER BY created_at DESC, id DESC
+            OFFSET 20
+          )
+        `);
 
         return inserted;
       });
