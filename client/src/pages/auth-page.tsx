@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 const loginSchema = z.object({
   username: z.string().min(3, "Korisničko ime mora imati najmanje 3 karaktera"),
   password: z.string().min(8, "Lozinka mora imati najmanje 8 karaktera"),
+  rememberMe: z.boolean().optional().default(false),
 });
 
 const registerSchema = insertUserSchema.extend({
@@ -79,6 +80,7 @@ export default function AuthPage() {
     defaultValues: {
       username: "",
       password: "",
+      rememberMe: false,
     },
   });
 
@@ -569,7 +571,25 @@ export default function AuthPage() {
                     )}
                   />
 
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-between">
+                    <FormField
+                      control={loginForm.control}
+                      name="rememberMe"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-remember-me"
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal cursor-pointer">
+                            Zapamti me
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
                     <Button
                       type="button"
                       variant="ghost"

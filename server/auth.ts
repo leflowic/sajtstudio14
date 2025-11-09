@@ -5,6 +5,7 @@ import { Express } from "express";
 import session from "express-session";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
+import { z } from "zod";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
 import { sendEmail } from "./resend-client";
@@ -225,10 +226,64 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    // SECURITY: Don't expose password hash
-    const { password, ...userWithoutPassword } = req.user!;
-    res.status(200).json(userWithoutPassword);
+  // Login with Remember Me support
+  const loginSchema = z.object({
+    username: z.string(),
+    password: z.string(),
+    rememberMe: z.boolean().optional().default(false),
+  });
+
+  app.post("/api/login", async (req, res, next) => {
+    try {
+      // Validate request body
+      const validatedData = loginSchema.parse(req.body);
+      const { username, password, rememberMe } = validatedData;
+
+      // Use custom passport callback to access user after authentication
+      passport.authenticate("local", (err: Error | null, user: SelectUser | false, info: any) => {
+        if (err) {
+          console.error("[AUTH] Login error:", err);
+          return next(err);
+        }
+
+        if (!user) {
+          console.log("[AUTH] Authentication failed:", info?.message);
+          return res.status(401).json({ 
+            error: info?.message || "Pogrešno korisničko ime ili lozinka" 
+          });
+        }
+
+        // Log user in
+        req.logIn(user, (loginErr) => {
+          if (loginErr) {
+            console.error("[AUTH] req.logIn error:", loginErr);
+            return next(loginErr);
+          }
+
+          // Set session cookie maxAge based on rememberMe
+          if (rememberMe) {
+            // Remember for 30 days
+            req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+            console.log("[AUTH] Remember Me enabled - session expires in 30 days");
+          } else {
+            // Session cookie (expires when browser closes)
+            req.session.cookie.maxAge = undefined;
+            delete req.session.cookie.expires;
+            console.log("[AUTH] Remember Me disabled - session cookie");
+          }
+
+          // SECURITY: Don't expose password hash
+          const { password, ...userWithoutPassword } = user;
+          res.status(200).json(userWithoutPassword);
+        });
+      })(req, res, next);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Nevažeći format podataka" });
+      }
+      console.error("[AUTH] Login validation error:", error);
+      next(error);
+    }
   });
 
   app.post("/api/logout", (req, res, next) => {
