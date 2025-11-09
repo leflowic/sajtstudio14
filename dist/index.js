@@ -29,13 +29,18 @@ __export(schema_exports, {
   insertCommentSchema: () => insertCommentSchema,
   insertContactSubmissionSchema: () => insertContactSubmissionSchema,
   insertContractSchema: () => insertContractSchema,
+  insertInvoiceSchema: () => insertInvoiceSchema,
   insertMessageSchema: () => insertMessageSchema,
   insertNewsletterSubscriberSchema: () => insertNewsletterSubscriberSchema,
+  insertPendingUserSchema: () => insertPendingUserSchema,
   insertProjectSchema: () => insertProjectSchema,
+  insertRegistrationAttemptSchema: () => insertRegistrationAttemptSchema,
   insertUserSchema: () => insertUserSchema,
   insertUserSongSchema: () => insertUserSongSchema,
   insertVideoSpotSchema: () => insertVideoSpotSchema,
   instrumentalSaleContractDataSchema: () => instrumentalSaleContractDataSchema,
+  invoiceStatusEnum: () => invoiceStatusEnum,
+  invoices: () => invoices,
   messageReads: () => messageReads,
   messageReadsRelations: () => messageReadsRelations,
   messages: () => messages,
@@ -43,8 +48,11 @@ __export(schema_exports, {
   mixMasterContractDataSchema: () => mixMasterContractDataSchema,
   newsletterSubscribers: () => newsletterSubscribers,
   normalizeConversationUsers: () => normalizeConversationUsers,
+  pendingUsers: () => pendingUsers,
+  projectStatusEnum: () => projectStatusEnum,
   projects: () => projects,
   projectsRelations: () => projectsRelations,
+  registrationAttempts: () => registrationAttempts,
   session: () => session,
   settings: () => settings,
   userSongVotes: () => userSongVotes,
@@ -56,17 +64,19 @@ __export(schema_exports, {
   votesRelations: () => votesRelations
 });
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json, index, pgEnum, numeric } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 function normalizeConversationUsers(userId1, userId2) {
   return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
 }
-var session, contactSubmissions, insertContactSubmissionSchema, users, projects, votes, comments, settings, cmsPages, cmsSections, cmsContentTypes, cmsContent, cmsMedia, videoSpots, userSongs, userSongVotes, newsletterSubscribers, conversations, messages, messageReads, adminMessageAudit, usersRelations, projectsRelations, votesRelations, commentsRelations, conversationsRelations, messagesRelations, messageReadsRelations, insertUserSchema, insertProjectSchema, insertCommentSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, insertMessageSchema, contracts, insertContractSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema;
+var projectStatusEnum, invoiceStatusEnum, session, contactSubmissions, insertContactSubmissionSchema, users, pendingUsers, registrationAttempts, projects, votes, comments, settings, cmsPages, cmsSections, cmsContentTypes, cmsContent, cmsMedia, videoSpots, userSongs, userSongVotes, newsletterSubscribers, conversations, messages, messageReads, adminMessageAudit, usersRelations, projectsRelations, votesRelations, commentsRelations, conversationsRelations, messagesRelations, messageReadsRelations, insertUserSchema, insertPendingUserSchema, insertRegistrationAttemptSchema, insertProjectSchema, insertCommentSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, insertMessageSchema, contracts, insertContractSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema, invoices, insertInvoiceSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
+    projectStatusEnum = pgEnum("project_status", ["waiting", "in_progress", "completed", "cancelled"]);
+    invoiceStatusEnum = pgEnum("invoice_status", ["pending", "paid", "overdue", "cancelled"]);
     session = pgTable("session", {
       sid: varchar("sid").primaryKey(),
       sess: json("sess").notNull(),
@@ -112,6 +122,39 @@ var init_schema = __esm({
       lastSeen: timestamp("last_seen"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
+    pendingUsers = pgTable("pending_users", {
+      id: serial("id").primaryKey(),
+      email: text("email").notNull().unique(),
+      password: text("password").notNull(),
+      // Pre-hashed password
+      username: text("username").notNull().unique(),
+      verificationCode: text("verification_code").notNull(),
+      ipAddress: text("ip_address").notNull(),
+      userAgent: text("user_agent"),
+      // For fraud detection heuristics
+      termsAccepted: boolean("terms_accepted").notNull(),
+      // No default - must be explicitly submitted
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      expiresAt: timestamp("expires_at").notNull()
+      // Auto-delete after 24 hours
+    }, (table) => ({
+      // Composite index for faster cleanup queries
+      emailExpiresIdx: index("pending_users_email_expires_idx").on(table.email, table.expiresAt)
+    }));
+    registrationAttempts = pgTable("registration_attempts", {
+      id: serial("id").primaryKey(),
+      ipAddress: text("ip_address").notNull(),
+      attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
+      email: text("email"),
+      // Track which email was attempted for fraud detection
+      userAgent: text("user_agent")
+      // For bot detection
+    }, (table) => ({
+      // Composite index for sliding-window rate limit queries
+      ipAttemptedIdx: index("registration_attempts_ip_attempted_idx").on(table.ipAddress, table.attemptedAt),
+      // Email index for fraud detection (same IP trying multiple emails)
+      emailIdx: index("registration_attempts_email_idx").on(table.email)
+    }));
     projects = pgTable("projects", {
       id: serial("id").primaryKey(),
       title: text("title").notNull(),
@@ -123,8 +166,9 @@ var init_schema = __esm({
       votesCount: integer("votes_count").notNull().default(0),
       currentMonth: text("current_month").notNull(),
       // e.g., "2025-01" to track monthly limit
-      approved: boolean("approved").notNull().default(false)
+      approved: boolean("approved").notNull().default(false),
       // Admin must approve before project is visible
+      status: projectStatusEnum("status").notNull().default("waiting")
     });
     votes = pgTable("votes", {
       id: serial("id").primaryKey(),
@@ -371,6 +415,31 @@ var init_schema = __esm({
         message: "Morate prihvatiti uslove kori\u0161\u0107enja"
       })
     });
+    insertPendingUserSchema = createInsertSchema(pendingUsers).omit({
+      id: true,
+      createdAt: true,
+      expiresAt: true,
+      verificationCode: true
+    }).extend({
+      email: z.string().email("Unesite validnu email adresu"),
+      password: z.string().min(8, "Lozinka mora imati najmanje 8 karaktera"),
+      username: z.string().min(3, "Korisni\u010Dko ime mora imati najmanje 3 karaktera"),
+      termsAccepted: z.boolean({
+        required_error: "Morate prihvatiti uslove kori\u0161\u0107enja"
+      }).refine((val) => val === true, {
+        message: "Morate prihvatiti uslove kori\u0161\u0107enja"
+      }),
+      ipAddress: z.string().min(1, "IP adresa je obavezna"),
+      userAgent: z.string().optional()
+    });
+    insertRegistrationAttemptSchema = createInsertSchema(registrationAttempts).omit({
+      id: true,
+      attemptedAt: true
+    }).extend({
+      ipAddress: z.string().min(1, "IP adresa je obavezna"),
+      email: z.string().email("Unesite validnu email adresu").optional(),
+      userAgent: z.string().optional()
+    });
     insertProjectSchema = createInsertSchema(projects).omit({
       id: true,
       uploadDate: true,
@@ -422,7 +491,8 @@ var init_schema = __esm({
       id: true,
       userId: true,
       submittedAt: true,
-      approved: true
+      approved: true,
+      votesCount: true
     }).extend({
       songTitle: z.string().min(3, "Naslov pesme mora imati najmanje 3 karaktera").max(100, "Naslov pesme mo\u017Ee imati najvi\u0161e 100 karaktera"),
       artistName: z.string().min(2, "Ime izvo\u0111a\u010Da mora imati najmanje 2 karaktera").max(100, "Ime izvo\u0111a\u010Da mo\u017Ee imati najvi\u0161e 100 karaktera"),
@@ -457,6 +527,8 @@ var init_schema = __esm({
       // Path to generated PDF file
       clientEmail: text("client_email"),
       // Client's email for sending contract
+      userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+      // Optional: Direct link to user account
       createdAt: timestamp("created_at").defaultNow().notNull(),
       createdBy: integer("created_by").notNull().references(() => users.id)
       // Admin who created the contract
@@ -469,7 +541,8 @@ var init_schema = __esm({
       contractType: z.enum(["mix_master", "copyright_transfer", "instrumental_sale"]),
       contractData: z.object({}).passthrough(),
       // Accept any valid JSON object
-      clientEmail: z.string().email("Neva\u017Ee\u0107a email adresa").optional().or(z.literal(""))
+      clientEmail: z.string().email("Neva\u017Ee\u0107a email adresa").optional().or(z.literal("")),
+      userId: z.number().int().positive().optional().nullable()
     });
     mixMasterContractDataSchema = z.object({
       contractDate: z.string().min(1, "Datum ugovora je obavezan"),
@@ -568,6 +641,52 @@ var init_schema = __esm({
       copies: z.string().min(1, "Broj primeraka je obavezan"),
       finalDate: z.string().min(1, "Zavr\u0161ni datum je obavezan")
     });
+    invoices = pgTable("invoices", {
+      id: serial("id").primaryKey(),
+      invoiceNumber: varchar("invoice_number", { length: 20 }).notNull().unique(),
+      contractId: integer("contract_id").references(() => contracts.id),
+      // Optional: link to contract
+      userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      // Client who receives the invoice
+      amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+      // Numeric for aggregations
+      currency: varchar("currency", { length: 3 }).notNull().default("RSD"),
+      // ISO currency code (RSD, EUR)
+      status: invoiceStatusEnum("status").notNull().default("pending"),
+      description: text("description").notNull(),
+      // What the invoice is for
+      notes: text("notes"),
+      // Optional additional notes
+      issuedDate: timestamp("issued_date").defaultNow().notNull(),
+      dueDate: timestamp("due_date").notNull(),
+      // Payment deadline
+      paidDate: timestamp("paid_date"),
+      // When payment was received
+      createdBy: integer("created_by").notNull().references(() => users.id),
+      // Admin who created the invoice
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    }, (table) => ({
+      // Index for finding invoices by user
+      userIdx: index("invoices_user_idx").on(table.userId),
+      // Index for finding invoices by status
+      statusIdx: index("invoices_status_idx").on(table.status),
+      // Index for finding overdue invoices
+      dueDateIdx: index("invoices_due_date_idx").on(table.dueDate)
+    }));
+    insertInvoiceSchema = createInsertSchema(invoices).omit({
+      id: true,
+      createdAt: true,
+      issuedDate: true
+    }).extend({
+      invoiceNumber: z.string().min(1, "Broj fakture je obavezan"),
+      amount: z.coerce.number().nonnegative("Iznos mora biti pozitivan broj"),
+      currency: z.enum(["RSD", "EUR"]).default("RSD"),
+      status: z.enum(["pending", "paid", "overdue", "cancelled"]).default("pending"),
+      description: z.string().min(1, "Opis je obavezan"),
+      notes: z.string().optional().nullable(),
+      dueDate: z.date().or(z.string()),
+      paidDate: z.date().or(z.string()).optional().nullable()
+    });
   }
 });
 
@@ -600,7 +719,7 @@ var pool = new Pool({
 var db = drizzle(pool, { schema: schema_exports });
 
 // server/storage.ts
-import { eq, and, desc, sql as sql2 } from "drizzle-orm";
+import { eq, and, or, desc, sql as sql2 } from "drizzle-orm";
 import session2 from "express-session";
 import connectPg from "connect-pg-simple";
 var PostgresSessionStore = connectPg(session2);
@@ -664,6 +783,23 @@ var DatabaseStorage = class {
   }
   async getAllUsers() {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+  async adminSearchUsers(query, limit = 20) {
+    const searchTerm = `%${query.toLowerCase()}%`;
+    const results = await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email
+    }).from(users).where(
+      or(
+        sql2`LOWER(${users.username}) LIKE ${searchTerm}`,
+        sql2`LOWER(${users.email}) LIKE ${searchTerm}`
+      )
+    ).orderBy(users.username).limit(limit);
+    return results;
+  }
+  async getAdminUsers() {
+    return await db.select().from(users).where(eq(users.role, "admin"));
   }
   async setVerificationCode(userId, code) {
     await db.update(users).set({ verificationCode: code }).where(eq(users.id, userId));
@@ -746,6 +882,81 @@ var DatabaseStorage = class {
   }
   async updateUserLastSeen(userId) {
     await db.update(users).set({ lastSeen: sql2`now()` }).where(eq(users.id, userId));
+  }
+  // Pending Users - for email verification before full registration
+  async createPendingUser(data) {
+    const [pendingUser] = await db.insert(pendingUsers).values(data).returning();
+    if (!pendingUser) throw new Error("Failed to create pending user");
+    return pendingUser;
+  }
+  async getPendingUserByEmail(email) {
+    const results = await db.select().from(pendingUsers).where(sql2`LOWER(${pendingUsers.email}) = LOWER(${email})`).limit(1);
+    return results[0];
+  }
+  async getPendingUserByUsername(username) {
+    const results = await db.select().from(pendingUsers).where(sql2`LOWER(${pendingUsers.username}) = LOWER(${username})`).limit(1);
+    return results[0];
+  }
+  async getPendingUserByCode(code) {
+    const results = await db.select().from(pendingUsers).where(eq(pendingUsers.verificationCode, code)).limit(1);
+    return results[0];
+  }
+  async deletePendingUser(id) {
+    await db.delete(pendingUsers).where(eq(pendingUsers.id, id));
+  }
+  async movePendingToUsers(pendingUserId) {
+    return await db.transaction(async (tx) => {
+      const [pendingUser] = await tx.select().from(pendingUsers).where(eq(pendingUsers.id, pendingUserId));
+      if (!pendingUser) {
+        throw new Error("Pending user not found");
+      }
+      const existingByEmail = await tx.select().from(users).where(sql2`LOWER(${users.email}) = LOWER(${pendingUser.email})`).limit(1);
+      if (existingByEmail.length > 0) {
+        throw new Error("Email already registered");
+      }
+      const existingByUsername = await tx.select().from(users).where(sql2`LOWER(${users.username}) = LOWER(${pendingUser.username})`).limit(1);
+      if (existingByUsername.length > 0) {
+        throw new Error("Username already taken");
+      }
+      const [newUser] = await tx.insert(users).values({
+        email: pendingUser.email,
+        password: pendingUser.password,
+        // Already hashed
+        username: pendingUser.username,
+        termsAccepted: pendingUser.termsAccepted,
+        emailVerified: true,
+        // They verified via email
+        role: "user",
+        banned: false
+      }).returning();
+      if (!newUser) throw new Error("Failed to create user");
+      await tx.delete(pendingUsers).where(eq(pendingUsers.id, pendingUserId));
+      return newUser;
+    });
+  }
+  async cleanupExpiredPendingUsers() {
+    const result = await db.delete(pendingUsers).where(sql2`${pendingUsers.expiresAt} < now()`);
+    return result.rowCount || 0;
+  }
+  // Registration Rate Limiting
+  async createRegistrationAttempt(data) {
+    const [attempt] = await db.insert(registrationAttempts).values(data).returning();
+    if (!attempt) throw new Error("Failed to create registration attempt");
+    return attempt;
+  }
+  async getRecentRegistrationAttempts(ipAddress, minutesAgo) {
+    return await db.select().from(registrationAttempts).where(
+      and(
+        eq(registrationAttempts.ipAddress, ipAddress),
+        sql2`${registrationAttempts.attemptedAt} > now() - interval '${sql2.raw(minutesAgo.toString())} minutes'`
+      )
+    ).orderBy(desc(registrationAttempts.attemptedAt));
+  }
+  async cleanupOldRegistrationAttempts(hoursAgo) {
+    const result = await db.delete(registrationAttempts).where(
+      sql2`${registrationAttempts.attemptedAt} < now() - interval '${sql2.raw(hoursAgo.toString())} hours'`
+    );
+    return result.rowCount || 0;
   }
   // Projects
   async createProject(data) {
@@ -1099,7 +1310,10 @@ var DatabaseStorage = class {
   }
   async getUserLastSongSubmissionTime(userId) {
     const [result] = await db.select({ submittedAt: userSongs.submittedAt }).from(userSongs).where(eq(userSongs.userId, userId)).orderBy(desc(userSongs.submittedAt)).limit(1);
-    return result?.submittedAt || null;
+    if (!result?.submittedAt) {
+      return null;
+    }
+    return new Date(result.submittedAt);
   }
   async getApprovedUserSongs(userId) {
     const results = await db.select({
@@ -1245,6 +1459,10 @@ var DatabaseStorage = class {
     }).returning();
     await db.update(conversations).set({ lastMessageAt: /* @__PURE__ */ new Date() }).where(eq(conversations.id, conversation.id));
     return message;
+  }
+  async getMessageById(messageId) {
+    const [message] = await db.select().from(messages).where(eq(messages.id, messageId));
+    return message || void 0;
   }
   async getConversationMessages(conversationId, userId) {
     const msgs = await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
@@ -1436,7 +1654,19 @@ ${"=".repeat(60)}
     return contract;
   }
   async getAllContracts() {
-    return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+    const result = await db.select({
+      id: contracts.id,
+      contractNumber: contracts.contractNumber,
+      contractType: contracts.contractType,
+      contractData: contracts.contractData,
+      pdfPath: contracts.pdfPath,
+      clientEmail: contracts.clientEmail,
+      createdAt: contracts.createdAt,
+      createdBy: contracts.createdBy,
+      userId: contracts.userId,
+      username: users.username
+    }).from(contracts).leftJoin(users, eq(contracts.userId, users.id)).orderBy(desc(contracts.createdAt));
+    return result;
   }
   async getContractById(id) {
     const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
@@ -1457,18 +1687,301 @@ ${"=".repeat(60)}
     const nextNumber = lastNumber + 1;
     return `${nextNumber.toString().padStart(3, "0")}/${yearSuffix}`;
   }
+  async updateContractUser(contractId, userId) {
+    await db.update(contracts).set({ userId }).where(eq(contracts.id, contractId));
+  }
   async deleteContract(id) {
     await db.delete(contracts).where(eq(contracts.id, id));
+  }
+  // Get next invoice number
+  async getNextInvoiceNumber() {
+    const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const yearPrefix = `INV-${currentYear}`;
+    const [latestInvoice] = await db.select().from(invoices).where(sql2`${invoices.invoiceNumber} LIKE ${yearPrefix + "-%"}`).orderBy(desc(invoices.invoiceNumber)).limit(1);
+    if (!latestInvoice) {
+      return `${yearPrefix}-001`;
+    }
+    const parts = latestInvoice.invoiceNumber.split("-");
+    if (parts.length < 3 || !parts[2]) {
+      return `${yearPrefix}-001`;
+    }
+    const lastNumber = parseInt(parts[2]);
+    const nextNumber = lastNumber + 1;
+    return `${yearPrefix}-${nextNumber.toString().padStart(3, "0")}`;
+  }
+  // Invoices
+  async createInvoice(data) {
+    const invoiceNumber = data.invoiceNumber || await this.getNextInvoiceNumber();
+    const invoiceData = {
+      ...data,
+      invoiceNumber,
+      amount: typeof data.amount === "number" ? data.amount.toString() : data.amount,
+      dueDate: typeof data.dueDate === "string" ? new Date(data.dueDate) : data.dueDate,
+      paidDate: data.paidDate ? typeof data.paidDate === "string" ? new Date(data.paidDate) : data.paidDate : null
+    };
+    const [invoice] = await db.insert(invoices).values([invoiceData]).returning();
+    if (!invoice) throw new Error("Failed to create invoice");
+    return invoice;
+  }
+  async getAllInvoices() {
+    return await db.select().from(invoices).orderBy(desc(invoices.createdAt));
+  }
+  async getUserInvoices(userId) {
+    const results = await db.select({
+      id: invoices.id,
+      userId: invoices.userId,
+      contractId: invoices.contractId,
+      invoiceNumber: invoices.invoiceNumber,
+      amount: invoices.amount,
+      currency: invoices.currency,
+      status: invoices.status,
+      description: invoices.description,
+      notes: invoices.notes,
+      issuedDate: invoices.issuedDate,
+      dueDate: invoices.dueDate,
+      paidDate: invoices.paidDate,
+      createdAt: invoices.createdAt,
+      createdBy: invoices.createdBy,
+      contractNumber: contracts.contractNumber,
+      contractType: contracts.contractType
+    }).from(invoices).leftJoin(contracts, eq(invoices.contractId, contracts.id)).where(eq(invoices.userId, userId)).orderBy(desc(invoices.dueDate));
+    return results.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      contractId: r.contractId,
+      invoiceNumber: r.invoiceNumber,
+      amount: r.amount,
+      currency: r.currency,
+      status: r.status,
+      description: r.description,
+      notes: r.notes,
+      issuedDate: r.issuedDate,
+      dueDate: r.dueDate,
+      paidDate: r.paidDate,
+      createdAt: r.createdAt,
+      createdBy: r.createdBy,
+      contractNumber: r.contractNumber,
+      contractType: r.contractType
+    }));
+  }
+  async getInvoiceById(id) {
+    const [invoice] = await db.select().from(invoices).where(eq(invoices.id, id));
+    return invoice || void 0;
+  }
+  async updateInvoiceStatus(id, status, paidDate) {
+    await db.update(invoices).set({ status, paidDate: paidDate || null }).where(eq(invoices.id, id));
+  }
+  async deleteInvoice(id) {
+    await db.delete(invoices).where(eq(invoices.id, id));
+  }
+  // Dashboard
+  async getUserProjects(userId) {
+    const results = await db.select({
+      id: projects.id,
+      userId: projects.userId,
+      title: projects.title,
+      description: projects.description,
+      genre: projects.genre,
+      mp3Url: projects.mp3Url,
+      uploadDate: projects.uploadDate,
+      votesCount: projects.votesCount,
+      currentMonth: projects.currentMonth,
+      approved: projects.approved,
+      status: projects.status,
+      username: users.username
+    }).from(projects).leftJoin(users, eq(projects.userId, users.id)).where(eq(projects.userId, userId)).orderBy(desc(projects.uploadDate));
+    return results.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      title: r.title,
+      description: r.description,
+      genre: r.genre,
+      mp3Url: r.mp3Url,
+      uploadDate: r.uploadDate,
+      votesCount: r.votesCount,
+      currentMonth: r.currentMonth,
+      approved: r.approved,
+      status: r.status,
+      username: r.username || "Unknown"
+    }));
+  }
+  async getUserContracts(userId) {
+    const user = await this.getUser(userId);
+    if (!user) return [];
+    const results = await db.select({
+      id: contracts.id,
+      contractNumber: contracts.contractNumber,
+      contractType: contracts.contractType,
+      clientEmail: contracts.clientEmail,
+      userId: contracts.userId,
+      pdfPath: contracts.pdfPath,
+      contractData: contracts.contractData,
+      createdAt: contracts.createdAt,
+      createdBy: contracts.createdBy,
+      username: users.username
+    }).from(contracts).leftJoin(users, eq(contracts.clientEmail, users.email)).where(
+      or(
+        eq(contracts.userId, userId),
+        eq(contracts.clientEmail, user.email)
+      )
+    ).orderBy(desc(contracts.createdAt));
+    return results.map((r) => ({
+      id: r.id,
+      contractNumber: r.contractNumber,
+      contractType: r.contractType,
+      clientEmail: r.clientEmail,
+      userId: r.userId,
+      pdfPath: r.pdfPath,
+      contractData: r.contractData,
+      createdAt: r.createdAt,
+      createdBy: r.createdBy,
+      username: r.username || "Unknown"
+    }));
+  }
+  async getDashboardOverview(userId) {
+    const userProjects = await this.getUserProjects(userId);
+    const projectsByStatus = userProjects.reduce((acc, project) => {
+      const status = project.status || "waiting";
+      acc[status] = (acc[status] || 0) + 1;
+      return acc;
+    }, {});
+    const userContracts = await this.getUserContracts(userId);
+    const userInvoices = await db.select({
+      id: invoices.id,
+      status: invoices.status,
+      amount: invoices.amount,
+      dueDate: invoices.dueDate,
+      isOverdue: sql2`${invoices.dueDate} < now() AND ${invoices.status} = 'pending'`
+    }).from(invoices).where(eq(invoices.userId, userId));
+    const pendingInvoices = userInvoices.filter(
+      (inv) => inv.status === "pending" && !inv.isOverdue
+    ).length;
+    const overdueInvoices = userInvoices.filter((inv) => inv.isOverdue).length;
+    const totalAmountPending = userInvoices.filter((inv) => inv.status === "pending" || inv.isOverdue).reduce((sum, inv) => sum + parseFloat(inv.amount || "0"), 0).toFixed(2);
+    const unreadMessages = await this.getUnreadMessageCount(userId);
+    return {
+      totalProjects: userProjects.length,
+      projectsByStatus,
+      totalContracts: userContracts.length,
+      totalInvoices: userInvoices.length,
+      pendingInvoices,
+      overdueInvoices,
+      totalAmountPending,
+      unreadMessages
+    };
+  }
+  async updateProjectStatus(projectId, status) {
+    await db.update(projects).set({ status }).where(eq(projects.id, projectId));
+  }
+  // Analytics
+  async getNewUsersCount(period) {
+    const now = /* @__PURE__ */ new Date();
+    let startDate;
+    if (period === "today") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === "week") {
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      startDate = new Date(now.getTime() - diff * 24 * 60 * 60 * 1e3);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const result = await db.select({ count: sql2`count(*)::int` }).from(users).where(sql2`${users.createdAt} >= ${startDate}`);
+    return result[0]?.count || 0;
+  }
+  async getTopProjects(limit) {
+    const result = await db.select({
+      id: projects.id,
+      title: projects.title,
+      description: projects.description,
+      genre: projects.genre,
+      mp3Url: projects.mp3Url,
+      userId: projects.userId,
+      votesCount: projects.votesCount,
+      currentMonth: projects.currentMonth,
+      uploadDate: projects.uploadDate,
+      approved: projects.approved,
+      status: projects.status,
+      username: users.username
+    }).from(projects).leftJoin(users, eq(projects.userId, users.id)).orderBy(desc(projects.votesCount)).limit(limit);
+    return result.map((r) => ({
+      ...r,
+      username: r.username || "Unknown"
+    }));
+  }
+  async getApprovedSongsCount(period) {
+    const now = /* @__PURE__ */ new Date();
+    let startDate;
+    if (period === "today") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === "week") {
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      startDate = new Date(now.getTime() - diff * 24 * 60 * 60 * 1e3);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+    const result = await db.select({ count: sql2`count(*)::int` }).from(userSongs).where(and(
+      eq(userSongs.approved, true),
+      sql2`${userSongs.submittedAt} >= ${startDate}`
+    ));
+    return result[0]?.count || 0;
+  }
+  async getContractStats() {
+    const allContracts = await db.select().from(contracts);
+    const total = allContracts.length;
+    const byType = {};
+    allContracts.forEach((contract) => {
+      const type = contract.contractType || "unknown";
+      byType[type] = (byType[type] || 0) + 1;
+    });
+    return { total, byType };
+  }
+  async getUnreadConversationsCount() {
+    const result = await db.select({ count: sql2`count(DISTINCT ${messages.conversationId})::int` }).from(messages).leftJoin(
+      messageReads,
+      and(
+        eq(messages.id, messageReads.messageId),
+        sql2`${messageReads.userId} = ${messages.receiverId}`
+      )
+    ).where(and(
+      eq(messages.deleted, false),
+      sql2`${messageReads.id} IS NULL`
+    ));
+    return result[0]?.count || 0;
   }
 };
 var storage = new DatabaseStorage();
 
 // server/websocket-helpers.ts
 var wsHelpers = {
-  broadcastToUser: null
+  broadcastToUser: null,
+  sendNotification: null,
+  getOnlineUserIds: null
 };
 function setBroadcastFunction(fn) {
   wsHelpers.broadcastToUser = fn;
+}
+function setNotificationFunction(fn) {
+  wsHelpers.sendNotification = fn;
+}
+function setOnlineUsersAccessor(fn) {
+  wsHelpers.getOnlineUserIds = fn;
+}
+function notifyUser(userId, title, description, variant = "default") {
+  if (wsHelpers.sendNotification) {
+    wsHelpers.sendNotification(userId, title, description, variant);
+  } else {
+    console.warn("[WS] sendNotification not initialized yet, skipping notification");
+  }
+}
+function getOnlineUsersSnapshot() {
+  if (wsHelpers.getOnlineUserIds) {
+    return wsHelpers.getOnlineUserIds();
+  }
+  return [];
 }
 
 // server/routes.ts
@@ -1694,10 +2207,24 @@ function setupAuth(app2) {
   });
   app2.post("/api/register", async (req, res, next) => {
     try {
+      const ipAddress = req.ip || req.socket.remoteAddress || "unknown";
+      const userAgent = req.headers["user-agent"] || void 0;
+      const recentAttempts = await storage.getRecentRegistrationAttempts(ipAddress, 15);
+      if (recentAttempts.length >= 3) {
+        console.log(`[AUTH] IP rate limit exceeded for ${ipAddress}: ${recentAttempts.length} attempts in last 15 minutes`);
+        return res.status(429).json({
+          error: "Previ\u0161e poku\u0161aja registracije. Molimo sa\u010Dekajte 15 minuta i poku\u0161ajte ponovo."
+        });
+      }
       const { insertUserSchema: insertUserSchema2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
       const validatedData = insertUserSchema2.parse(req.body);
       const normalizedEmail = validatedData.email.toLowerCase();
       const normalizedUsername = validatedData.username.toLowerCase();
+      await storage.createRegistrationAttempt({
+        ipAddress,
+        email: normalizedEmail,
+        userAgent
+      });
       const existingUser = await storage.getUserByUsername(normalizedUsername);
       if (existingUser) {
         return res.status(400).send("Korisni\u010Dko ime ve\u0107 postoji");
@@ -1706,14 +2233,33 @@ function setupAuth(app2) {
       if (existingEmail) {
         return res.status(400).send("Email adresa ve\u0107 postoji");
       }
-      const user = await storage.createUser({
-        ...validatedData,
+      const pendingUserByEmail = await storage.getPendingUserByEmail(normalizedEmail);
+      if (pendingUserByEmail) {
+        return res.status(400).json({
+          error: "Email adresa ve\u0107 postoji. Molimo proverite va\u0161 inbox za verifikacioni kod ili sa\u010Dekajte da prethodni zahtev istekne."
+        });
+      }
+      const pendingUserByUsername = await storage.getPendingUserByUsername(normalizedUsername);
+      if (pendingUserByUsername) {
+        return res.status(400).json({
+          error: "Korisni\u010Dko ime ve\u0107 postoji. Molimo odaberite drugo korisni\u010Dko ime ili sa\u010Dekajte da prethodni zahtev istekne."
+        });
+      }
+      const verificationCode = generateVerificationCode();
+      const hashedPassword = await hashPassword(validatedData.password);
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1e3);
+      const pendingUser = await storage.createPendingUser({
         email: normalizedEmail,
         username: normalizedUsername,
-        password: await hashPassword(validatedData.password)
+        password: hashedPassword,
+        // Already hashed
+        verificationCode,
+        ipAddress,
+        userAgent,
+        termsAccepted: validatedData.termsAccepted,
+        expiresAt
       });
-      const verificationCode = generateVerificationCode();
-      await storage.setVerificationCode(user.id, verificationCode);
+      console.log(`[AUTH] Created pending user (id: ${pendingUser.id}) for ${normalizedEmail}`);
       console.log(`[AUTH] Attempting to send verification email to: ${validatedData.email}`);
       console.log(`[AUTH] Verification code generated: ${verificationCode}`);
       try {
@@ -1728,7 +2274,7 @@ function setupAuth(app2) {
               <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 30px 0; border-radius: 8px;">
                 <h1 style="color: #7c3aed; font-size: 36px; letter-spacing: 8px; margin: 0;">${verificationCode}</h1>
               </div>
-              <p>Ovaj kod isti\u010De za 15 minuta.</p>
+              <p>Ovaj kod isti\u010De za 24 sata.</p>
               <p>Ako niste kreirali nalog, ignori\u0161ite ovaj email.</p>
               <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
               <p style="color: #666; font-size: 12px;">Studio LeFlow - Profesionalna Muzi\u010Dka Produkcija</p>
@@ -1739,17 +2285,21 @@ function setupAuth(app2) {
       } catch (emailError) {
         console.error("[AUTH] Failed to send verification email:", emailError);
         console.error("[AUTH] Email error details:", emailError.message);
-        await storage.deleteUser(user.id);
+        await storage.deletePendingUser(pendingUser.id);
         return res.status(500).json({
           error: "Gre\u0161ka pri slanju verifikacionog email-a. Molimo proverite da li je email adresa ispravna i poku\u0161ajte ponovo."
         });
       }
-      const { password, verificationCode: _, ...userWithoutSensitiveData } = user;
-      res.status(201).json(userWithoutSensitiveData);
+      res.status(201).json({
+        message: "Registracija uspe\u0161na! Proverite va\u0161 email za verifikacioni kod.",
+        email: normalizedEmail,
+        username: normalizedUsername
+      });
     } catch (error) {
       if (error.name === "ZodError") {
         return res.status(400).json({ error: "Validacija nije uspela", details: error.errors });
       }
+      console.error("[AUTH] Registration error:", error);
       res.status(500).send(error.message);
     }
   });
@@ -1930,7 +2480,7 @@ function drawContractLogo(doc) {
       align: "center"
     });
     doc.fontSize(9).font("DejaVuSans").fillColor("#666666");
-    const infoY = headerTop + 70;
+    const infoY = headerTop + 95;
     doc.text("Studio LeFlow | Beograd, Srbija", leftMargin, infoY, {
       width: pageWidth - leftMargin - rightMargin,
       align: "center"
@@ -2057,9 +2607,6 @@ function generateMixMasterPDF(data) {
     doc.fontSize(10).font("DejaVuSans");
     doc.text("____________________________", 100, doc.y, { continued: true, width: 200 });
     doc.text("____________________________", 320, doc.y - doc.currentLineHeight(), { width: 200 });
-    doc.moveDown(0.3);
-    doc.text("Pru\u017Ealac usluge", 100, doc.y, { continued: true, width: 200 });
-    doc.text("Naru\u010Dilac usluge", 320, doc.y - doc.currentLineHeight(), { width: 200 });
     doc.moveDown(2);
     doc.text(`Datum: ${data.finalDate}`, { align: "center" });
     doc.end();
@@ -2287,9 +2834,6 @@ function generateInstrumentalSalePDF(data) {
     doc.fontSize(10).font("DejaVuSans");
     doc.text("____________________________", 100, doc.y, { continued: true, width: 200 });
     doc.text("____________________________", 320, doc.y - doc.currentLineHeight(), { width: 200 });
-    doc.moveDown(0.3);
-    doc.text("Izdava\u010D licence (Studio)", 100, doc.y, { continued: true, width: 200 });
-    doc.text("Korisnik licence", 320, doc.y - doc.currentLineHeight(), { width: 200 });
     doc.moveDown(2);
     doc.text(`Datum izdavanja: ${data.finalDate}`, { align: "center" });
     doc.end();
@@ -2329,6 +2873,23 @@ function escapeHtml(text2) {
     "'": "&#039;"
   };
   return text2.replace(/[&<>"']/g, (m) => map[m] || m);
+}
+var analyticsCache = /* @__PURE__ */ new Map();
+var CACHE_TTL = 45e3;
+function getCachedData(key) {
+  const entry = analyticsCache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    analyticsCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+function setCachedData(key, data) {
+  analyticsCache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL
+  });
 }
 function sanitizeUser(user) {
   const {
@@ -2501,29 +3062,44 @@ async function registerRoutes(app2) {
   });
   app2.post("/api/verify-email", async (req, res) => {
     try {
-      const { userId, code } = req.body;
-      if (!userId || !code) {
-        return res.status(400).json({ error: "userId i kod su obavezni" });
+      const { code } = req.body;
+      if (!code) {
+        return res.status(400).json({ error: "Verifikacioni kod je obavezan" });
       }
-      const isValid = await storage.verifyEmail(userId, code);
-      if (!isValid) {
-        return res.status(400).json({ error: "Neva\u017Ee\u0107i ili istekao verifikacioni kod" });
+      const pendingUser = await storage.getPendingUserByCode(code);
+      if (!pendingUser) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i verifikacioni kod" });
       }
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      if (/* @__PURE__ */ new Date() > new Date(pendingUser.expiresAt)) {
+        await storage.deletePendingUser(pendingUser.id);
+        return res.status(400).json({
+          error: "Verifikacioni kod je istekao. Molimo registrujte se ponovo."
+        });
       }
+      let user;
+      try {
+        user = await storage.movePendingToUsers(pendingUser.id);
+      } catch (moveError) {
+        console.error("[VERIFY] Failed to move pending user to users:", moveError);
+        if (moveError.message.includes("already")) {
+          return res.status(400).json({ error: moveError.message });
+        }
+        return res.status(500).json({ error: "Gre\u0161ka pri kreiranju naloga" });
+      }
+      console.log(`[VERIFY] Successfully created and verified user ${user.username} (id: ${user.id})`);
       if (user.banned) {
         return res.status(403).json({ error: "Va\u0161 nalog je banovan" });
       }
       req.login(user, (err) => {
         if (err) {
+          console.error("[VERIFY] Login error after verification:", err);
           return res.status(500).json({ error: "Gre\u0161ka pri prijavljivanju" });
         }
-        const { password, verificationCode, ...userWithoutPassword } = user;
+        const { password, ...userWithoutPassword } = user;
         res.json({ success: true, user: userWithoutPassword });
       });
     } catch (error) {
+      console.error("[VERIFY] Verification error:", error);
       res.status(500).json({ error: "Gre\u0161ka na serveru" });
     }
   });
@@ -3049,6 +3625,19 @@ async function registerRoutes(app2) {
         userId: req.user.id,
         currentMonth
       });
+      notifyUser(
+        req.user.id,
+        "Projekat uploadovan! \u{1F389}",
+        `Va\u0161 projekat "${project.title}" je uspe\u0161no poslat. Sada mo\u017Eete glasati za druge projekte.`
+      );
+      const admins = await storage.getAdminUsers();
+      admins.forEach((admin) => {
+        notifyUser(
+          admin.id,
+          "Novi projekat uploadovan",
+          `${req.user.username} je uploadovao projekat "${project.title}"`
+        );
+      });
       res.status(201).json(project);
     } catch (error) {
       if (error.name === "ZodError") {
@@ -3137,6 +3726,19 @@ async function registerRoutes(app2) {
     try {
       const users2 = await storage.getAllUsers();
       res.json(users2);
+    } catch (error) {
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/admin/users/search", requireAdmin, async (req, res) => {
+    try {
+      const query = req.query.q;
+      const limit = parseInt(req.query.limit) || 20;
+      if (!query || query.trim().length === 0) {
+        return res.json({ users: [] });
+      }
+      const users2 = await storage.adminSearchUsers(query.trim(), limit);
+      res.json({ users: users2 });
     } catch (error) {
       res.status(500).json({ error: "Gre\u0161ka na serveru" });
     }
@@ -3455,6 +4057,14 @@ async function registerRoutes(app2) {
         artistName: validated.artistName,
         youtubeUrl: validated.youtubeUrl
       });
+      const admins = await storage.getAdminUsers();
+      admins.forEach((admin) => {
+        notifyUser(
+          admin.id,
+          "Nova pesma za odobrenje",
+          `${req.user.username} je poslao pesmu "${newSong.songTitle}" - ${newSong.artistName}`
+        );
+      });
       res.json(newSong);
     } catch (error) {
       if (error.name === "ZodError") {
@@ -3516,7 +4126,16 @@ async function registerRoutes(app2) {
       if (isNaN(songId)) {
         return res.status(400).json({ error: "Neva\u017Ee\u0107i ID" });
       }
+      const song = await storage.getUserSongById(songId);
+      if (!song) {
+        return res.status(404).json({ error: "Pesma nije prona\u0111ena" });
+      }
       await storage.approveUserSong(songId);
+      notifyUser(
+        song.userId,
+        "Pesma odobrena! \u{1F3B5}",
+        `Va\u0161a pesma "${song.songTitle}" je odobrena i sada je vidljiva svima.`
+      );
       res.json({ success: true });
     } catch (error) {
       console.error("Error approving user song:", error);
@@ -3697,6 +4316,16 @@ Sitemap: ${siteUrl}/sitemap.xml
         content.trim(),
         imageUrl
       );
+      if (wsHelpers.broadcastToUser) {
+        wsHelpers.broadcastToUser(receiverId, {
+          type: "new_message",
+          message
+        });
+        wsHelpers.broadcastToUser(req.user.id, {
+          type: "new_message",
+          message
+        });
+      }
       res.json(message);
     } catch (error) {
       console.error("[MESSAGING] Send message error:", error);
@@ -3726,14 +4355,84 @@ Sitemap: ${siteUrl}/sitemap.xml
       if (isNaN(messageId)) {
         return res.status(400).json({ error: "Neva\u017Ee\u0107i ID poruke" });
       }
+      const message = await storage.getMessageById(messageId);
       const success = await storage.deleteMessage(messageId, req.user.id);
       if (!success) {
         return res.status(403).json({ error: "Ne mo\u017Eete obrisati ovu poruku" });
+      }
+      if (message && wsHelpers.broadcastToUser) {
+        const deletedMessageEvent = {
+          type: "message_deleted",
+          messageId
+        };
+        wsHelpers.broadcastToUser(message.senderId, deletedMessageEvent);
+        wsHelpers.broadcastToUser(message.receiverId, deletedMessageEvent);
       }
       res.json({ success: true });
     } catch (error) {
       console.error("[MESSAGING] Delete message error:", error);
       res.status(500).json({ error: "Gre\u0161ka pri brisanju poruke" });
+    }
+  });
+  app2.get("/api/dashboard/overview", requireVerifiedEmail, async (req, res) => {
+    try {
+      const overview = await storage.getDashboardOverview(req.user.id);
+      res.json(overview);
+    } catch (error) {
+      console.error("[DASHBOARD] Get overview error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju dashboard pregleda" });
+    }
+  });
+  app2.get("/api/user/projects", requireVerifiedEmail, async (req, res) => {
+    try {
+      const projects2 = await storage.getUserProjects(req.user.id);
+      res.json(projects2);
+    } catch (error) {
+      console.error("[DASHBOARD] Get user projects error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju projekata" });
+    }
+  });
+  app2.get("/api/user/contracts", requireVerifiedEmail, async (req, res) => {
+    try {
+      const contracts2 = await storage.getUserContracts(req.user.id);
+      res.json(contracts2);
+    } catch (error) {
+      console.error("[DASHBOARD] Get user contracts error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju ugovora" });
+    }
+  });
+  app2.get("/api/user/invoices", requireVerifiedEmail, async (req, res) => {
+    try {
+      const invoices2 = await storage.getUserInvoices(req.user.id);
+      res.json(invoices2);
+    } catch (error) {
+      console.error("[DASHBOARD] Get user invoices error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju faktura" });
+    }
+  });
+  app2.put("/api/admin/projects/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const projectId = parseInt(req.params.id);
+      const { status } = req.body;
+      if (isNaN(projectId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID projekta" });
+      }
+      if (!status || !["waiting", "in_progress", "completed", "cancelled"].includes(status)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i status. Dozvoljeni: waiting, in_progress, completed, cancelled" });
+      }
+      await storage.updateProjectStatus(projectId, status);
+      const project = await storage.getProject(projectId);
+      if (project) {
+        notifyUser(
+          project.userId,
+          "Status projekta a\u017Euriran",
+          `Status va\u0161eg projekta "${project.title}" je promenjen na: ${status}`
+        );
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[ADMIN] Update project status error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri a\u017Euriranju statusa projekta" });
     }
   });
   app2.get("/api/admin/messages/conversations", requireAdmin, async (req, res) => {
@@ -4063,6 +4762,32 @@ Sitemap: ${siteUrl}/sitemap.xml
       res.status(500).json({ error: "Gre\u0161ka pri slanju email-a" });
     }
   });
+  app2.patch("/api/admin/contracts/:id/assign-user", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { userId } = req.body;
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID ugovora" });
+      }
+      let parsedUserId = null;
+      if (userId !== null && userId !== void 0) {
+        parsedUserId = parseInt(userId);
+        if (isNaN(parsedUserId)) {
+          return res.status(400).json({ error: "Neva\u017Ee\u0107i userId" });
+        }
+        const user = await storage.getUser(parsedUserId);
+        if (!user) {
+          return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+        }
+      }
+      await storage.updateContractUser(contractId, parsedUserId);
+      const message = parsedUserId === null ? "Dodela ugovora uspe\u0161no uklonjena" : "Ugovor uspe\u0161no dodeljen korisniku";
+      res.json({ success: true, message });
+    } catch (error) {
+      console.error("[CONTRACTS] Assign user error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri dodeljivanju ugovora" });
+    }
+  });
   app2.delete("/api/admin/contracts/:id", requireAdmin, async (req, res) => {
     try {
       const contractId = parseInt(req.params.id);
@@ -4084,6 +4809,156 @@ Sitemap: ${siteUrl}/sitemap.xml
     } catch (error) {
       console.error("[CONTRACTS] Delete error:", error);
       res.status(500).json({ error: "Gre\u0161ka pri brisanju ugovora" });
+    }
+  });
+  app2.post("/api/admin/invoices", requireAdmin, async (req, res) => {
+    try {
+      const invoiceNumber = await storage.getNextInvoiceNumber();
+      const invoiceData = insertInvoiceSchema.parse({
+        ...req.body,
+        invoiceNumber,
+        createdBy: req.user.id,
+        currency: req.body.currency || "RSD",
+        status: req.body.status || "pending"
+      });
+      const invoice = await storage.createInvoice(invoiceData);
+      res.json(invoice);
+    } catch (error) {
+      console.error("[INVOICES] Create error:", error);
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i podaci", details: error.errors });
+      }
+      res.status(500).json({ error: "Gre\u0161ka pri kreiranju fakture" });
+    }
+  });
+  app2.get("/api/admin/invoices", requireAdmin, async (req, res) => {
+    try {
+      const invoices2 = await storage.getAllInvoices();
+      res.json(invoices2);
+    } catch (error) {
+      console.error("[INVOICES] Get all error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju faktura" });
+    }
+  });
+  app2.patch("/api/admin/invoices/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      const { status } = req.body;
+      if (isNaN(invoiceId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID fakture" });
+      }
+      if (!status || !["pending", "paid", "cancelled"].includes(status)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i status fakture" });
+      }
+      const paidDate = status === "paid" ? /* @__PURE__ */ new Date() : void 0;
+      await storage.updateInvoiceStatus(invoiceId, status, paidDate);
+      res.json({ success: true, message: "Status fakture a\u017Euriran" });
+    } catch (error) {
+      console.error("[INVOICES] Update status error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri a\u017Euriranju statusa fakture" });
+    }
+  });
+  app2.delete("/api/admin/invoices/:id", requireAdmin, async (req, res) => {
+    try {
+      const invoiceId = parseInt(req.params.id);
+      if (isNaN(invoiceId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID fakture" });
+      }
+      await storage.deleteInvoice(invoiceId);
+      res.json({ success: true, message: "Faktura uspe\u0161no obrisana" });
+    } catch (error) {
+      console.error("[INVOICES] Delete error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri brisanju fakture" });
+    }
+  });
+  app2.get("/api/admin/analytics/summary", requireAdmin, async (_req, res) => {
+    try {
+      const cacheKey = "analytics:summary";
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+      const [
+        newUsersToday,
+        newUsersWeek,
+        newUsersMonth,
+        topProjects,
+        approvedSongsToday,
+        approvedSongsWeek,
+        approvedSongsMonth,
+        contractStats,
+        unreadConversations
+      ] = await Promise.all([
+        storage.getNewUsersCount("today"),
+        storage.getNewUsersCount("week"),
+        storage.getNewUsersCount("month"),
+        storage.getTopProjects(10),
+        storage.getApprovedSongsCount("today"),
+        storage.getApprovedSongsCount("week"),
+        storage.getApprovedSongsCount("month"),
+        storage.getContractStats(),
+        storage.getUnreadConversationsCount()
+      ]);
+      const summary = {
+        newUsers: {
+          today: newUsersToday,
+          week: newUsersWeek,
+          month: newUsersMonth
+        },
+        approvedSongs: {
+          today: approvedSongsToday,
+          week: approvedSongsWeek,
+          month: approvedSongsMonth
+        },
+        topProjects: topProjects.slice(0, 5),
+        contracts: contractStats,
+        unreadConversations,
+        activeUsers: getOnlineUsersSnapshot().length
+      };
+      setCachedData(cacheKey, summary);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching analytics summary:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju analitike" });
+    }
+  });
+  app2.get("/api/admin/analytics/active-users", requireAdmin, async (_req, res) => {
+    try {
+      const onlineUserIds = getOnlineUsersSnapshot();
+      const onlineUsers = await Promise.all(
+        onlineUserIds.map(async (userId) => {
+          const user = await storage.getUser(userId);
+          if (!user) return null;
+          return {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            role: user.role
+          };
+        })
+      );
+      const validUsers = onlineUsers.filter((u) => u !== null);
+      res.json({ count: validUsers.length, users: validUsers });
+    } catch (error) {
+      console.error("Error fetching active users:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju aktivnih korisnika" });
+    }
+  });
+  app2.get("/api/admin/analytics/top-projects", requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit) || 10;
+      const cacheKey = `analytics:top-projects:${limit}`;
+      const cached = getCachedData(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+      const topProjects = await storage.getTopProjects(limit);
+      setCachedData(cacheKey, topProjects);
+      res.json(topProjects);
+    } catch (error) {
+      console.error("Error fetching top projects:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju top projekata" });
     }
   });
   const httpServer = createServer(app2);
@@ -4143,24 +5018,56 @@ var vite_config_default = defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "react/jsx-runtime"]
-        }
+        manualChunks(id) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom")) {
+            return "vendor-react";
+          }
+          if (id.includes("node_modules/@radix-ui") || id.includes("components/ui")) {
+            return "vendor-ui";
+          }
+          if (id.includes("node_modules/react-hook-form") || id.includes("node_modules/zod") || id.includes("node_modules/@hookform")) {
+            return "vendor-forms";
+          }
+          if (id.includes("node_modules/@tanstack/react-query")) {
+            return "vendor-query";
+          }
+          if (id.includes("node_modules/framer-motion")) {
+            return "vendor-motion";
+          }
+          if (id.includes("node_modules/lucide-react") || id.includes("node_modules/react-icons")) {
+            return "vendor-icons";
+          }
+          if (id.includes("node_modules/@tiptap")) {
+            return "vendor-editor";
+          }
+          if (id.includes("node_modules")) {
+            return "vendor-other";
+          }
+        },
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
+        assetFileNames: "assets/[name]-[hash].[ext]"
       }
     },
-    cssMinify: true,
+    cssMinify: "esbuild",
     minify: "terser",
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
-        pure_funcs: ["console.log", "console.info"]
+        pure_funcs: ["console.log", "console.info", "console.debug"],
+        passes: 2
       },
       mangle: {
         safari10: true
+      },
+      format: {
+        comments: false
       }
     },
-    chunkSizeWarningLimit: 1e3
+    chunkSizeWarningLimit: 600,
+    reportCompressedSize: false,
+    sourcemap: false
   },
   server: {
     host: "0.0.0.0",
@@ -4337,9 +5244,10 @@ async function seedCmsContent() {
 import { WebSocketServer, WebSocket } from "ws";
 var app = express2();
 app.use(compression({
-  level: 6,
-  threshold: 1024,
-  // Only compress responses larger than 1KB
+  level: 9,
+  // Maximum compression for production
+  threshold: 512,
+  // Compress responses larger than 512 bytes
   filter: (req, res) => {
     if (req.headers["x-no-compression"]) {
       return false;
@@ -4349,10 +5257,23 @@ app.use(compression({
 }));
 app.use("/attached_assets", express2.static(path5.join(process.cwd(), "attached_assets"), {
   maxAge: "1y",
-  immutable: true
+  immutable: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith(".webp") || filePath.endsWith(".jpg") || filePath.endsWith(".png")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+    if (filePath.endsWith(".js") || filePath.endsWith(".css")) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+  }
 }));
 app.use("/public", express2.static(path5.join(process.cwd(), "public"), {
-  maxAge: "1d"
+  maxAge: "7d",
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith(".jpg") || filePath.endsWith(".png") || filePath.endsWith(".webp")) {
+      res.setHeader("Cache-Control", "public, max-age=604800");
+    }
+  }
 }));
 app.set("trust proxy", 1);
 app.use(express2.json({
@@ -4404,11 +5325,18 @@ app.use((req, res, next) => {
           }
         });
       }
+    }, sendNotification2 = function(userId, title, description, variant = "default") {
+      broadcastToUser2(userId, {
+        type: "notification",
+        title,
+        description,
+        variant
+      });
     }, getConversationKey2 = function(user1Id, user2Id) {
       const [id1, id2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
       return `${id1}-${id2}`;
     };
-    var broadcastToUser = broadcastToUser2, getConversationKey = getConversationKey2;
+    var broadcastToUser = broadcastToUser2, sendNotification = sendNotification2, getConversationKey = getConversationKey2;
     const env = app.get("env");
     log(`Starting server in ${env} mode`);
     log(`PORT: ${process.env.PORT || "5000"}`);
@@ -4469,6 +5397,8 @@ app.use((req, res, next) => {
     const onlineUsers = /* @__PURE__ */ new Map();
     const typingUsers = /* @__PURE__ */ new Map();
     setBroadcastFunction(broadcastToUser2);
+    setNotificationFunction(sendNotification2);
+    setOnlineUsersAccessor(() => Array.from(onlineUsers.keys()));
     app.use((err, _req, res, _next) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
@@ -4499,6 +5429,24 @@ app.use((req, res, next) => {
       console.error("Full error:", error);
       process.exit(1);
     });
+    const CLEANUP_INTERVAL = 60 * 60 * 1e3;
+    const runCleanup = async () => {
+      try {
+        const expiredPending = await storage.cleanupExpiredPendingUsers();
+        if (expiredPending > 0) {
+          log(`[CLEANUP] Deleted ${expiredPending} expired pending users`);
+        }
+        const oldAttempts = await storage.cleanupOldRegistrationAttempts(1);
+        if (oldAttempts > 0) {
+          log(`[CLEANUP] Deleted ${oldAttempts} old registration attempts`);
+        }
+      } catch (error) {
+        console.error("[CLEANUP] Error during cleanup job:", error);
+      }
+    };
+    runCleanup();
+    setInterval(runCleanup, CLEANUP_INTERVAL);
+    log(`[CLEANUP] Scheduled cleanup job to run every ${CLEANUP_INTERVAL / 1e3 / 60} minutes`);
     const wss = new WebSocketServer({ server, path: "/api/ws" });
     wss.on("connection", async (ws, req) => {
       try {
