@@ -58,7 +58,7 @@ export default function UserSearch({ onSelectUser }: UserSearchProps) {
   };
 
   return (
-    <div className="relative" ref={searchRef}>
+    <div className="relative" ref={searchRef} data-testid="user-search-container">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -71,14 +71,15 @@ export default function UserSearch({ onSelectUser }: UserSearchProps) {
           }}
           onFocus={() => setShowResults(true)}
           className="pl-10"
+          data-testid="input-user-search"
         />
         {isLoading && (
-          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+          <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" data-testid="loader-search" />
         )}
       </div>
 
       {showResults && searchResults && searchResults.length > 0 && (
-        <Card className="absolute top-full mt-1 w-full z-50 max-h-64 overflow-y-auto">
+        <Card className="absolute top-full mt-1 w-full z-50 max-h-64 overflow-y-auto" data-testid="search-results">
           {searchResults.map((user) => (
             <button
               key={user.id}
@@ -86,6 +87,7 @@ export default function UserSearch({ onSelectUser }: UserSearchProps) {
               className={cn(
                 "w-full flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors text-left border-b last:border-b-0"
               )}
+              data-testid={`user-result-${user.id}`}
             >
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                 <User className="w-4 h-4 text-primary" />
@@ -100,8 +102,14 @@ export default function UserSearch({ onSelectUser }: UserSearchProps) {
       )}
 
       {showResults && debouncedQuery.length >= 2 && searchResults?.length === 0 && !isLoading && (
-        <Card className="absolute top-full mt-1 w-full z-50 p-4 text-center text-sm text-muted-foreground">
+        <Card className="absolute top-full mt-1 w-full z-50 p-4 text-center text-sm text-muted-foreground" data-testid="no-results">
           Nema rezultata
+        </Card>
+      )}
+
+      {showResults && debouncedQuery.length > 0 && debouncedQuery.length < 2 && (
+        <Card className="absolute top-full mt-1 w-full z-50 p-4 text-center text-sm text-muted-foreground" data-testid="search-hint">
+          Unesite najmanje 2 karaktera
         </Card>
       )}
     </div>
