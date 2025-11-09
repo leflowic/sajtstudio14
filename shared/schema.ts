@@ -7,6 +7,7 @@ import { z } from "zod";
 // Enums for type-safe status fields
 export const projectStatusEnum = pgEnum("project_status", ["waiting", "in_progress", "completed", "cancelled"]);
 export const invoiceStatusEnum = pgEnum("invoice_status", ["pending", "paid", "overdue", "cancelled"]);
+export const userRankEnum = pgEnum("user_rank", ["user", "vip", "legend", "admin"]);
 
 // Session table - managed by connect-pg-simple for express-session
 export const session = pgTable("session", {
@@ -47,6 +48,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   username: text("username").notNull().unique(),
   role: text("role").notNull().default("user"), // "user" or "admin"
+  rank: userRankEnum("rank").notNull().default("user"), // "user", "vip", "legend", "admin"
   banned: boolean("banned").notNull().default(false),
   termsAccepted: boolean("terms_accepted").notNull().default(false),
   emailVerified: boolean("email_verified").notNull().default(false),
@@ -216,6 +218,19 @@ export const userSongVotes = pgTable("user_song_votes", {
   uniqueUserSong: unique().on(table.userId, table.songId),
   // Performance index for counting votes per song
   songIdx: index("user_song_votes_song_idx").on(table.songId),
+}));
+
+// Community Messages table - for global community chat in /zajednica
+export const communityMessages = pgTable("community_messages", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => ({
+  // Index for fetching recent messages efficiently
+  createdAtIdx: index("community_messages_created_at_idx").on(table.createdAt),
+  // Index for rate limiting checks (user's last message)
+  userCreatedIdx: index("community_messages_user_created_idx").on(table.userId, table.createdAt),
 }));
 
 // Newsletter Subscribers table - for email subscriptions
@@ -718,3 +733,14 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
 
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 export type Invoice = typeof invoices.$inferSelect;
+
+// Community Messages - insert schema and types
+export const insertCommunityMessageSchema = createInsertSchema(communityMessages).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  message: z.string().min(1, "Poruka ne može biti prazna").max(500, "Poruka može imati maksimalno 500 karaktera"),
+});
+
+export type InsertCommunityMessage = z.infer<typeof insertCommunityMessageSchema>;
+export type CommunityMessage = typeof communityMessages.$inferSelect;
