@@ -1911,7 +1911,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         onlineUsers.forEach(userId => {
           wsHelpers.broadcastToUser!(userId, {
             type: "community-chat:new",
-            payload: enrichedMessage
+            message: enrichedMessage
           });
         });
       }
