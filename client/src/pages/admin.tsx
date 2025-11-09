@@ -31,6 +31,7 @@ import type { User, CmsContent, InsertCmsContent } from "@shared/schema";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { AvatarWithInitials } from "@/components/ui/avatar-with-initials";
 
 interface AdminStats {
   totalUsers: number;
@@ -69,6 +70,8 @@ interface ConversationWithUsers {
   user2Id: number;
   user1Username: string;
   user2Username: string;
+  user1AvatarUrl: string | null;
+  user2AvatarUrl: string | null;
   messageCount: number;
   lastMessageAt: string;
   lastMessageContent: string | null;
@@ -710,11 +713,25 @@ function MessagesTab() {
                         selectedConversation?.id === conversation.id ? "bg-accent border-primary" : ""
                       }`}
                       onClick={() => setSelectedConversation(conversation)}
+                      data-testid={`card-conversation-${conversation.id}`}
                     >
                       <CardContent className="p-4">
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <Users className="w-4 h-4 text-muted-foreground" />
+                            <div className="flex items-center -space-x-2">
+                              <AvatarWithInitials
+                                userId={conversation.user1Id}
+                                username={conversation.user1Username}
+                                avatarUrl={conversation.user1AvatarUrl}
+                                size="sm"
+                              />
+                              <AvatarWithInitials
+                                userId={conversation.user2Id}
+                                username={conversation.user2Username}
+                                avatarUrl={conversation.user2AvatarUrl}
+                                size="sm"
+                              />
+                            </div>
                             <span className="font-medium">
                               {conversation.user1Username} ↔ {conversation.user2Username}
                             </span>

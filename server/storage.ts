@@ -144,7 +144,7 @@ export interface IStorage {
   markMessagesAsRead(conversationId: number, userId: number): Promise<void>;
   getUnreadMessageCount(userId: number): Promise<number>;
   deleteMessage(messageId: number, userId: number): Promise<boolean>;
-  adminGetAllConversations(): Promise<Array<{ id: number; user1Id: number; user2Id: number; user1Username: string; user2Username: string; messageCount: number; lastMessageAt: Date | null; lastMessageContent: string | null; lastMessageSenderUsername: string | null; lastMessageDeleted: boolean }>>;
+  adminGetAllConversations(): Promise<Array<{ id: number; user1Id: number; user2Id: number; user1Username: string; user2Username: string; user1AvatarUrl: string | null; user2AvatarUrl: string | null; messageCount: number; lastMessageAt: Date | null; lastMessageContent: string | null; lastMessageSenderUsername: string | null; lastMessageDeleted: boolean }>>;
   adminGetConversationMessages(user1Id: number, user2Id: number): Promise<Message[]>;
   adminDeleteMessage(messageId: number): Promise<boolean>;
   adminLogConversationView(adminId: number, viewedUser1Id: number, viewedUser2Id: number): Promise<void>;
@@ -1031,7 +1031,7 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async adminGetAllConversations(): Promise<Array<{ id: number; user1Id: number; user2Id: number; user1Username: string; user2Username: string; messageCount: number; lastMessageAt: Date | null; lastMessageContent: string | null; lastMessageSenderUsername: string | null; lastMessageDeleted: boolean }>> {
+  async adminGetAllConversations(): Promise<Array<{ id: number; user1Id: number; user2Id: number; user1Username: string; user2Username: string; user1AvatarUrl: string | null; user2AvatarUrl: string | null; messageCount: number; lastMessageAt: Date | null; lastMessageContent: string | null; lastMessageSenderUsername: string | null; lastMessageDeleted: boolean }>> {
     const allConvos = await db
       .select()
       .from(conversations)
@@ -1040,12 +1040,12 @@ export class DatabaseStorage implements IStorage {
     const results = await Promise.all(
       allConvos.map(async (convo) => {
         const [user1] = await db
-          .select({ id: users.id, username: users.username })
+          .select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl })
           .from(users)
           .where(eq(users.id, convo.user1Id));
 
         const [user2] = await db
-          .select({ id: users.id, username: users.username })
+          .select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl })
           .from(users)
           .where(eq(users.id, convo.user2Id));
 
@@ -1081,6 +1081,8 @@ export class DatabaseStorage implements IStorage {
           user2Id: convo.user2Id,
           user1Username: user1?.username || 'Unknown',
           user2Username: user2?.username || 'Unknown',
+          user1AvatarUrl: user1?.avatarUrl || null,
+          user2AvatarUrl: user2?.avatarUrl || null,
           messageCount: Number(msgCount?.count ?? 0),
           lastMessageAt: convo.lastMessageAt,
           lastMessageContent: lastMsg?.content || null,

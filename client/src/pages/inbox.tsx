@@ -2,14 +2,16 @@ import { useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Search } from "lucide-react";
 import ConversationList from "@/components/messaging/ConversationList";
 import ChatInterface from "@/components/messaging/ChatInterface";
 
 export default function Inbox() {
   const { user } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   if (!user || !user.emailVerified) {
     return (
@@ -35,13 +37,25 @@ export default function Inbox() {
 
       <div className="h-full flex flex-col md:flex-row">
         <Card className={`w-full md:w-96 md:rounded-none md:rounded-l-lg border-0 md:border-r ${selectedUserId ? 'hidden md:flex' : 'flex'} flex-col`}>
-          <div className="p-4 border-b">
+          <div className="p-4 border-b space-y-3">
             <h2 className="text-xl font-bold">Poruke</h2>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Pretraži konverzacije..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-conversations"
+              />
+            </div>
           </div>
           <div className="flex-1 overflow-hidden">
             <ConversationList
               selectedUserId={selectedUserId}
               onSelectConversation={setSelectedUserId}
+              searchQuery={searchQuery}
             />
           </div>
         </Card>

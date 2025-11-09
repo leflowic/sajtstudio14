@@ -34,6 +34,7 @@ interface ConversationData {
 interface ConversationListProps {
   selectedUserId: number | null;
   onSelectConversation: (userId: number) => void;
+  searchQuery?: string;
 }
 
 function formatTimestamp(dateString: string): string {
@@ -55,7 +56,7 @@ function formatTimestamp(dateString: string): string {
   return format(date, "d MMM", { locale: sr });
 }
 
-export default function ConversationList({ selectedUserId, onSelectConversation }: ConversationListProps) {
+export default function ConversationList({ selectedUserId, onSelectConversation, searchQuery = "" }: ConversationListProps) {
   const { user } = useAuth();
   const { subscribe } = useWebSocketContext();
 
@@ -67,6 +68,11 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
       return res.json();
     },
   });
+
+  // Filter conversations based on search query
+  const filteredConversations = conversations?.filter((conv) =>
+    conv.otherUser.username.toLowerCase().includes(searchQuery.toLowerCase())
+  ) || [];
 
   useEffect(() => {
     const unsubscribe = subscribe((message) => {
@@ -104,9 +110,9 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
       <Separator />
       
       <ScrollArea className="flex-1">
-        {conversations && conversations.length > 0 ? (
+        {filteredConversations && filteredConversations.length > 0 ? (
           <div>
-            {conversations.map((conversation) => (
+            {filteredConversations.map((conversation) => (
               <button
                 key={conversation.id}
                 onClick={() => onSelectConversation(conversation.otherUser.id)}
@@ -153,6 +159,11 @@ export default function ConversationList({ selectedUserId, onSelectConversation 
                 </div>
               </button>
             ))}
+          </div>
+        ) : conversations && conversations.length > 0 ? (
+          <div className="p-8 text-center text-muted-foreground">
+            <p className="text-sm">Nema rezultata pretrage</p>
+            <p className="text-xs mt-1">Pokušajte sa drugim imenom korisnika</p>
           </div>
         ) : (
           <div className="p-8 text-center text-muted-foreground">
