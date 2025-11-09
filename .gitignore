@@ -48,3 +48,7 @@ temp/
 # Uploads (keep the directory but not the files)
 uploads/*
 !uploads/.gitkeep
+
+# Generated Contracts (PDFs should not be in version control)
+attached_assets/contracts/
+!attached_assets/contracts/.gitkeep

@@ -22,6 +22,8 @@ import {
   type Message,
   type MessageRead,
   type AdminMessageAudit,
+  type Contract,
+  type InsertContract,
   contactSubmissions,
   users,
   projects,
@@ -36,6 +38,7 @@ import {
   messages,
   messageReads,
   adminMessageAudit,
+  contracts,
 } from "@shared/schema";
 import { db, pool } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -151,6 +154,13 @@ export interface IStorage {
   adminGetAuditLogs(): Promise<Array<AdminMessageAudit & { adminUsername: string; user1Username: string; user2Username: string }>>;
   adminExportConversation(user1Id: number, user2Id: number): Promise<string>;
   adminGetMessagingStats(): Promise<{ totalMessages: number; totalConversations: number; deletedMessages: number; activeConversations: number }>;
+
+  // Contracts
+  createContract(data: InsertContract): Promise<Contract>;
+  getAllContracts(): Promise<Contract[]>;
+  getContractById(id: number): Promise<Contract | undefined>;
+  getNextContractNumber(): Promise<string>;
+  deleteContract(id: number): Promise<void>;
 
   // Session store
   sessionStore: Store;
@@ -1263,6 +1273,49 @@ export class DatabaseStorage implements IStorage {
       deletedMessages: Number(deletedMessagesResult?.count ?? 0),
       activeConversations: Number(activeConversationsResult?.count ?? 0),
     };
+  }
+
+  // Contracts
+  async createContract(data: InsertContract): Promise<Contract> {
+    const [contract] = await db.insert(contracts).values(data).returning();
+    return contract!;
+  }
+
+  async getAllContracts(): Promise<Contract[]> {
+    return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+  }
+
+  async getContractById(id: number): Promise<Contract | undefined> {
+    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
+    return contract || undefined;
+  }
+
+  async getNextContractNumber(): Promise<string> {
+    const currentYear = new Date().getFullYear();
+    const yearSuffix = `${currentYear}`;
+    
+    // Get the latest contract for this year (format: NNN/YYYY)
+    const [latestContract] = await db
+      .select()
+      .from(contracts)
+      .where(sql`${contracts.contractNumber} LIKE ${'%/' + yearSuffix}`)
+      .orderBy(desc(contracts.contractNumber))
+      .limit(1);
+
+    if (!latestContract) {
+      return `001/${yearSuffix}`;
+    }
+
+    // Extract number from format "NNN/YYYY"
+    const parts = latestContract.contractNumber.split('/');
+    const lastNumber = parseInt(parts[0]);
+    const nextNumber = lastNumber + 1;
+    
+    return `${nextNumber.toString().padStart(3, '0')}/${yearSuffix}`;
+  }
+
+  async deleteContract(id: number): Promise<void> {
+    await db.delete(contracts).where(eq(contracts.id, id));
   }
 }
 

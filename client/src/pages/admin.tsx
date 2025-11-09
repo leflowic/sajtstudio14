@@ -32,6 +32,7 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { AvatarWithInitials } from "@/components/ui/avatar-with-initials";
+import { ContractsTab } from "@/components/admin/ContractsTab";
 
 interface AdminStats {
   totalUsers: number;
@@ -156,13 +157,14 @@ export default function AdminPage() {
         </div>
 
         <Tabs defaultValue="dashboard" className="w-full" data-testid="tabs-admin">
-          <TabsList className="grid w-full grid-cols-8 mb-8" data-testid="tabs-list-admin">
+          <TabsList className="grid w-full grid-cols-9 mb-8" data-testid="tabs-list-admin">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">Korisnici</TabsTrigger>
             <TabsTrigger value="projects" data-testid="tab-projects">Projekti</TabsTrigger>
             <TabsTrigger value="comments" data-testid="tab-comments">Komentari</TabsTrigger>
             <TabsTrigger value="newsletter" data-testid="tab-newsletter">Newsletter</TabsTrigger>
             <TabsTrigger value="messages" data-testid="tab-messages">Poruke</TabsTrigger>
+            <TabsTrigger value="contracts" data-testid="tab-contracts">Ugovori</TabsTrigger>
             <TabsTrigger value="cms" data-testid="tab-cms">CMS</TabsTrigger>
             <TabsTrigger value="settings" data-testid="tab-settings">Podešavanja</TabsTrigger>
           </TabsList>
@@ -189,6 +191,10 @@ export default function AdminPage() {
 
           <TabsContent value="messages">
             <MessagesTab />
+          </TabsContent>
+
+          <TabsContent value="contracts">
+            <ContractsTab />
           </TabsContent>
 
           <TabsContent value="cms">

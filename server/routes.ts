@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { wsHelpers } from "./websocket-helpers";
-import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertNewsletterSubscriberSchema, type CmsContent, type CmsMedia, type VideoSpot } from "@shared/schema";
+import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertNewsletterSubscriberSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema, type CmsContent, type CmsMedia, type VideoSpot } from "@shared/schema";
 import { sendEmail, getLastVerificationCode } from "./resend-client";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
 import multer from "multer";
@@ -12,6 +12,7 @@ import { z } from "zod";
 import { randomBytes } from "crypto";
 import { createRouteHandler } from "uploadthing/express";
 import { uploadRouter } from "./uploadthing";
+import { generateMixMasterPDF, generateCopyrightTransferPDF, generateInstrumentalSalePDF, type MixMasterContract, type CopyrightTransferContract, type InstrumentalSaleContract } from "./pdf-generators";
 
 // Configure multer for CMS media uploads (disk storage for images)
 const multerUpload = multer({
@@ -1870,6 +1871,320 @@ Sitemap: ${siteUrl}/sitemap.xml
     } catch (error: any) {
       console.error("[ADMIN MESSAGING] Get stats error:", error);
       res.status(500).json({ error: "Greška pri učitavanju statistike" });
+    }
+  });
+
+  // ========== CONTRACTS ==========
+
+  // Generate contract PDF
+  app.post("/api/admin/contracts/generate", requireAdmin, async (req, res) => {
+    try {
+      const { contractType, contractData } = req.body;
+
+      if (!contractType || !contractData) {
+        return res.status(400).json({ error: "Tip ugovora i podaci su obavezni" });
+      }
+
+      // Validate contractData based on contract type
+      let validatedData: any;
+      try {
+        switch (contractType) {
+          case "mix_master":
+            validatedData = mixMasterContractDataSchema.parse(contractData);
+            break;
+          case "copyright_transfer":
+            validatedData = copyrightTransferContractDataSchema.parse(contractData);
+            break;
+          case "instrumental_sale":
+            validatedData = instrumentalSaleContractDataSchema.parse(contractData);
+            break;
+          default:
+            return res.status(400).json({ error: "Nevažeći tip ugovora" });
+        }
+      } catch (validationError: any) {
+        console.error("[CONTRACTS] Validation error:", validationError);
+        return res.status(400).json({ 
+          error: "Validacija podataka nije uspela", 
+          details: validationError.errors || validationError.message 
+        });
+      }
+
+      // Get next contract number
+      const contractNumber = await storage.getNextContractNumber();
+
+      // Generate PDF based on contract type
+      let pdfBuffer: Buffer;
+      switch (contractType) {
+        case "mix_master":
+          pdfBuffer = await generateMixMasterPDF(validatedData as MixMasterContract);
+          break;
+        case "copyright_transfer":
+          pdfBuffer = await generateCopyrightTransferPDF(validatedData as CopyrightTransferContract);
+          break;
+        case "instrumental_sale":
+          pdfBuffer = await generateInstrumentalSalePDF(validatedData as InstrumentalSaleContract);
+          break;
+        default:
+          return res.status(400).json({ error: "Nevažeći tip ugovora" });
+      }
+
+      // Save PDF to disk
+      const contractsDir = path.join(process.cwd(), 'attached_assets', 'contracts');
+      fs.mkdirSync(contractsDir, { recursive: true });
+      
+      const filename = `ugovor_${contractNumber.replace('/', '_')}.pdf`;
+      const pdfPath = path.join(contractsDir, filename);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+
+      // Save contract to database
+      const contract = await storage.createContract({
+        contractNumber,
+        contractType,
+        contractData,
+        pdfPath: `attached_assets/contracts/${filename}`,
+        clientEmail: contractData.clientEmail || null,
+        createdBy: req.user!.id,
+      });
+
+      res.json({ 
+        success: true, 
+        contract: {
+          id: contract.id,
+          contractNumber: contract.contractNumber,
+          contractType: contract.contractType,
+        }
+      });
+    } catch (error: any) {
+      console.error("[CONTRACTS] Generate error:", error);
+      res.status(500).json({ error: "Greška pri generisanju ugovora" });
+    }
+  });
+
+  // Get all contracts
+  app.get("/api/admin/contracts", requireAdmin, async (req, res) => {
+    try {
+      const contracts = await storage.getAllContracts();
+      res.json(contracts);
+    } catch (error: any) {
+      console.error("[CONTRACTS] Get all error:", error);
+      res.status(500).json({ error: "Greška pri učitavanju ugovora" });
+    }
+  });
+
+  // Download contract PDF
+  app.get("/api/admin/contracts/:id/download", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Nevažeći ID ugovora" });
+      }
+
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije pronađen" });
+      }
+
+      const pdfPath = path.join(process.cwd(), contract.pdfPath!);
+      
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: "PDF fajl nije pronađen" });
+      }
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="ugovor_${contract.contractNumber.replace('/', '_')}.pdf"`);
+      
+      const fileStream = fs.createReadStream(pdfPath);
+      fileStream.pipe(res);
+    } catch (error: any) {
+      console.error("[CONTRACTS] Download error:", error);
+      res.status(500).json({ error: "Greška pri preuzimanju ugovora" });
+    }
+  });
+
+  // Send contract via email
+  app.post("/api/admin/contracts/:id/send-email", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { email } = req.body;
+
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Nevažeći ID ugovora" });
+      }
+
+      if (!email || !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        return res.status(400).json({ error: "Nevažeća email adresa" });
+      }
+
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije pronađen" });
+      }
+
+      const pdfPath = path.join(process.cwd(), contract.pdfPath!);
+      
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: "PDF fajl nije pronađen" });
+      }
+
+      // Read PDF as base64
+      const pdfBuffer = fs.readFileSync(pdfPath);
+      const pdfBase64 = pdfBuffer.toString('base64');
+
+      // Professional HTML email template
+      const emailHtml = `
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f4f4f7;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f7;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                Studio LeFlow
+              </h1>
+              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
+                Profesionalna muzička produkcija
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px; font-weight: 600;">
+                Poštovani,
+              </h2>
+              
+              <p style="margin: 0 0 16px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                U prilogu Vam dostavljamo ugovor broj <strong>${contract.contractNumber}</strong>.
+              </p>
+
+              <p style="margin: 0 0 24px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                Molimo Vas da pažljivo pregledate dokument. Ukoliko imate bilo kakvih pitanja ili nedoumica, 
+                slobodno nas kontaktirajte.
+              </p>
+
+              <!-- Contract Info Box -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f8f9fa; border-radius: 6px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Broj ugovora:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${contract.contractNumber}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Tip:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${contract.contractType === 'mix_master' ? 'Mix & Master' : contract.contractType === 'copyright_transfer' ? 'Prenos autorskih prava' : 'Prodaja instrumentala'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Datum:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${new Date(contract.createdAt).toLocaleDateString('sr-RS')}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 8px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                Srdačan pozdrav,
+              </p>
+              <p style="margin: 0 0 24px; color: #667eea; font-size: 16px; font-weight: 600; line-height: 1.6;">
+                Studio LeFlow tim
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">
+                Studio LeFlow | Beograd, Srbija
+              </p>
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                Ova poruka je automatski generisana. Molimo ne odgovarajte direktno na ovaj email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `;
+
+      // Send email with PDF attachment
+      await sendEmail({
+        to: email,
+        subject: `Studio LeFlow - Ugovor ${contract.contractNumber}`,
+        html: emailHtml,
+        attachments: [{
+          filename: `ugovor_${contract.contractNumber.replace('/', '_')}.pdf`,
+          content: pdfBase64,
+          encoding: 'base64',
+          contentType: 'application/pdf',
+        }],
+      });
+
+      res.json({ success: true, message: "Email uspešno poslat" });
+    } catch (error: any) {
+      console.error("[CONTRACTS] Send email error:", error);
+      res.status(500).json({ error: "Greška pri slanju email-a" });
+    }
+  });
+
+  // Delete contract
+  app.delete("/api/admin/contracts/:id", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Nevažeći ID ugovora" });
+      }
+
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije pronađen" });
+      }
+
+      // Delete PDF file
+      if (contract.pdfPath) {
+        const pdfPath = path.join(process.cwd(), contract.pdfPath);
+        if (fs.existsSync(pdfPath)) {
+          fs.unlinkSync(pdfPath);
+        }
+      }
+
+      // Delete from database
+      await storage.deleteContract(contractId);
+
+      res.json({ success: true, message: "Ugovor uspešno obrisan" });
+    } catch (error: any) {
+      console.error("[CONTRACTS] Delete error:", error);
+      res.status(500).json({ error: "Greška pri brisanju ugovora" });
     }
   });
 

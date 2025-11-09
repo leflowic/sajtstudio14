@@ -429,3 +429,129 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export function normalizeConversationUsers(userId1: number, userId2: number): [number, number] {
   return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
 }
+
+// Contracts table - for legal contract generation and management
+export const contracts = pgTable("contracts", {
+  id: serial("id").primaryKey(),
+  contractNumber: varchar("contract_number", { length: 20 }).notNull().unique(),
+  contractType: varchar("contract_type", { length: 50 }).notNull(), // "mix_master" | "copyright_transfer" | "instrumental_sale"
+  contractData: json("contract_data").notNull(), // All contract-specific fields stored as JSON
+  pdfPath: text("pdf_path"), // Path to generated PDF file
+  clientEmail: text("client_email"), // Client's email for sending contract
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdBy: integer("created_by").notNull().references(() => users.id), // Admin who created the contract
+});
+
+export const insertContractSchema = createInsertSchema(contracts).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  contractNumber: z.string().min(1, "Broj ugovora je obavezan"),
+  contractType: z.enum(["mix_master", "copyright_transfer", "instrumental_sale"]),
+  contractData: z.object({}).passthrough(), // Accept any valid JSON object
+  clientEmail: z.string().email("Nevažeća email adresa").optional().or(z.literal("")),
+});
+
+export type InsertContract = z.infer<typeof insertContractSchema>;
+export type Contract = typeof contracts.$inferSelect;
+
+// Contract Data Validation Schemas
+export const mixMasterContractDataSchema = z.object({
+  contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+  contractPlace: z.string().min(1, "Mesto je obavezno"),
+  studioName: z.string().min(1, "Naziv studija je obavezan"),
+  studioAddress: z.string().min(1, "Adresa studija je obavezna"),
+  studioMaticniBroj: z.string().optional(),
+  clientName: z.string().min(1, "Ime klijenta je obavezno"),
+  clientAddress: z.string().min(1, "Adresa klijenta je obavezna"),
+  clientMaticniBroj: z.string().optional(),
+  projectName: z.string().min(1, "Naziv projekta je obavezan"),
+  channelCount: z.string().min(1, "Broj kanala je obavezan"),
+  deliveryFormat: z.string().min(1, "Format isporuke je obavezan"),
+  deliveryDate: z.string().min(1, "Rok isporuke je obavezan"),
+  totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+  advancePayment: z.string().min(1, "Avans je obavezan"),
+  remainingPayment: z.string().min(1, "Preostali iznos je obavezan"),
+  paymentMethod: z.string().min(1, "Način plaćanja je obavezan"),
+  vocalRecording: z.enum(["yes", "no"]),
+  vocalRights: z.enum(["client", "studio", "other"]).optional(),
+  vocalRightsOther: z.string().optional(),
+  jurisdiction: z.string().min(1, "Nadležni sud je obavezan"),
+  copies: z.string().min(1, "Broj primeraka je obavezan"),
+  finalDate: z.string().min(1, "Završni datum je obavezan"),
+});
+
+export const copyrightTransferContractDataSchema = z.object({
+  contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+  contractPlace: z.string().min(1, "Mesto je obavezno"),
+  authorName: z.string().min(1, "Ime autora je obavezno"),
+  authorAddress: z.string().min(1, "Adresa autora je obavezna"),
+  authorMaticniBroj: z.string().optional(),
+  buyerName: z.string().min(1, "Ime kupca je obavezno"),
+  buyerAddress: z.string().min(1, "Adresa kupca je obavezna"),
+  buyerMaticniBroj: z.string().optional(),
+  songTitle: z.string().min(1, "Naziv pesme je obavezan"),
+  components: z.object({
+    text: z.boolean(),
+    music: z.boolean(),
+    vocals: z.boolean(),
+    mixMaster: z.boolean(),
+    other: z.boolean(),
+    otherText: z.string().optional(),
+  }),
+  rightsType: z.enum(["exclusive", "nonexclusive"]),
+  rightsScope: z.object({
+    reproduction: z.boolean(),
+    distribution: z.boolean(),
+    performance: z.boolean(),
+    adaptation: z.boolean(),
+    other: z.boolean(),
+    otherText: z.string().optional(),
+  }),
+  territory: z.string().min(1, "Teritorija je obavezna"),
+  duration: z.string().min(1, "Trajanje je obavezno"),
+  totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+  firstPayment: z.string().optional(),
+  firstPaymentDate: z.string().optional(),
+  secondPayment: z.string().optional(),
+  secondPaymentDate: z.string().optional(),
+  paymentMethod: z.string().min(1, "Način plaćanja je obavezan"),
+  authorPercentage: z.string().optional(),
+  buyerPercentage: z.string().optional(),
+  jurisdiction: z.string().min(1, "Nadležni sud je obavezan"),
+  copies: z.string().min(1, "Broj primeraka je obavezan"),
+  finalDate: z.string().min(1, "Završni datum je obavezan"),
+});
+
+export const instrumentalSaleContractDataSchema = z.object({
+  contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+  contractPlace: z.string().min(1, "Mesto je obavezno"),
+  authorName: z.string().min(1, "Ime autora je obavezno"),
+  authorAddress: z.string().min(1, "Adresa autora je obavezna"),
+  authorMaticniBroj: z.string().optional(),
+  buyerName: z.string().min(1, "Ime kupca je obavezno"),
+  buyerAddress: z.string().min(1, "Adresa kupca je obavezna"),
+  buyerMaticniBroj: z.string().optional(),
+  instrumentalName: z.string().min(1, "Naziv instrumentala je obavezan"),
+  duration: z.string().optional(),
+  rightsType: z.enum(["exclusive", "nonexclusive"]),
+  rightsScope: z.object({
+    reproduction: z.boolean(),
+    distribution: z.boolean(),
+    performance: z.boolean(),
+    adaptation: z.boolean(),
+    other: z.boolean(),
+    otherText: z.string().optional(),
+  }),
+  territory: z.string().min(1, "Teritorija je obavezna"),
+  durationPeriod: z.string().min(1, "Trajanje je obavezno"),
+  totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+  advancePayment: z.string().min(1, "Avans je obavezan"),
+  remainingPayment: z.string().min(1, "Preostali iznos je obavezan"),
+  paymentMethod: z.string().min(1, "Način plaćanja je obavezan"),
+  authorPercentage: z.string().optional(),
+  buyerPercentage: z.string().optional(),
+  jurisdiction: z.string().min(1, "Nadležni sud je obavezan"),
+  copies: z.string().min(1, "Broj primeraka je obavezan"),
+  finalDate: z.string().min(1, "Završni datum je obavezan"),
+});
