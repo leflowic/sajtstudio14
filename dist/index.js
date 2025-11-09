@@ -11,6 +11,7 @@ var __export = (target, all) => {
 // shared/schema.ts
 var schema_exports = {};
 __export(schema_exports, {
+  adminMessageAudit: () => adminMessageAudit,
   cmsContent: () => cmsContent,
   cmsContentTypes: () => cmsContentTypes,
   cmsMedia: () => cmsMedia,
@@ -19,17 +20,35 @@ __export(schema_exports, {
   comments: () => comments,
   commentsRelations: () => commentsRelations,
   contactSubmissions: () => contactSubmissions,
+  contracts: () => contracts,
+  conversations: () => conversations,
+  conversationsRelations: () => conversationsRelations,
+  copyrightTransferContractDataSchema: () => copyrightTransferContractDataSchema,
   insertCmsContentSchema: () => insertCmsContentSchema,
   insertCmsMediaSchema: () => insertCmsMediaSchema,
   insertCommentSchema: () => insertCommentSchema,
   insertContactSubmissionSchema: () => insertContactSubmissionSchema,
+  insertContractSchema: () => insertContractSchema,
+  insertMessageSchema: () => insertMessageSchema,
+  insertNewsletterSubscriberSchema: () => insertNewsletterSubscriberSchema,
   insertProjectSchema: () => insertProjectSchema,
   insertUserSchema: () => insertUserSchema,
+  insertUserSongSchema: () => insertUserSongSchema,
   insertVideoSpotSchema: () => insertVideoSpotSchema,
+  instrumentalSaleContractDataSchema: () => instrumentalSaleContractDataSchema,
+  messageReads: () => messageReads,
+  messageReadsRelations: () => messageReadsRelations,
+  messages: () => messages,
+  messagesRelations: () => messagesRelations,
+  mixMasterContractDataSchema: () => mixMasterContractDataSchema,
+  newsletterSubscribers: () => newsletterSubscribers,
+  normalizeConversationUsers: () => normalizeConversationUsers,
   projects: () => projects,
   projectsRelations: () => projectsRelations,
   session: () => session,
   settings: () => settings,
+  userSongVotes: () => userSongVotes,
+  userSongs: () => userSongs,
   users: () => users,
   usersRelations: () => usersRelations,
   videoSpots: () => videoSpots,
@@ -37,11 +56,14 @@ __export(schema_exports, {
   votesRelations: () => votesRelations
 });
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, serial, integer, boolean, unique, json, index } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var session, contactSubmissions, insertContactSubmissionSchema, users, projects, votes, comments, settings, cmsPages, cmsSections, cmsContentTypes, cmsContent, cmsMedia, videoSpots, usersRelations, projectsRelations, votesRelations, commentsRelations, insertUserSchema, insertProjectSchema, insertCommentSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema;
+function normalizeConversationUsers(userId1, userId2) {
+  return userId1 < userId2 ? [userId1, userId2] : [userId2, userId1];
+}
+var session, contactSubmissions, insertContactSubmissionSchema, users, projects, votes, comments, settings, cmsPages, cmsSections, cmsContentTypes, cmsContent, cmsMedia, videoSpots, userSongs, userSongVotes, newsletterSubscribers, conversations, messages, messageReads, adminMessageAudit, usersRelations, projectsRelations, votesRelations, commentsRelations, conversationsRelations, messagesRelations, messageReadsRelations, insertUserSchema, insertProjectSchema, insertCommentSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, insertMessageSchema, contracts, insertContractSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -81,7 +103,13 @@ var init_schema = __esm({
       termsAccepted: boolean("terms_accepted").notNull().default(false),
       emailVerified: boolean("email_verified").notNull().default(false),
       verificationCode: text("verification_code"),
+      passwordResetToken: text("password_reset_token"),
+      passwordResetExpiry: timestamp("password_reset_expiry"),
+      adminLoginToken: text("admin_login_token"),
+      adminLoginExpiry: timestamp("admin_login_expiry"),
       usernameLastChanged: timestamp("username_last_changed"),
+      avatarUrl: text("avatar_url"),
+      lastSeen: timestamp("last_seen"),
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
     projects = pgTable("projects", {
@@ -165,10 +193,102 @@ var init_schema = __esm({
       // for custom ordering
       createdAt: timestamp("created_at").defaultNow().notNull()
     });
+    userSongs = pgTable("user_songs", {
+      id: serial("id").primaryKey(),
+      userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      songTitle: text("song_title").notNull(),
+      artistName: text("artist_name").notNull(),
+      youtubeUrl: text("youtube_url").notNull().unique(),
+      // Duplicate protection
+      submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+      approved: boolean("approved").notNull().default(false),
+      // Admin must approve
+      votesCount: integer("votes_count").notNull().default(0)
+      // Cached vote count for sorting
+    }, (table) => ({
+      // Index for efficient rate limiting queries (find user's last submission)
+      userSubmittedIdx: index("user_songs_user_submitted_idx").on(table.userId, table.submittedAt),
+      // Index for fetching approved songs
+      approvedIdx: index("user_songs_approved_idx").on(table.approved),
+      // Index for sorting by votes
+      votesCountIdx: index("user_songs_votes_count_idx").on(table.votesCount)
+    }));
+    userSongVotes = pgTable("user_song_votes", {
+      id: serial("id").primaryKey(),
+      userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      songId: integer("song_id").notNull().references(() => userSongs.id, { onDelete: "cascade" }),
+      votedAt: timestamp("voted_at").defaultNow().notNull()
+    }, (table) => ({
+      // Prevent duplicate votes: user can only vote once per song
+      uniqueUserSong: unique().on(table.userId, table.songId),
+      // Performance index for counting votes per song
+      songIdx: index("user_song_votes_song_idx").on(table.songId)
+    }));
+    newsletterSubscribers = pgTable("newsletter_subscribers", {
+      id: serial("id").primaryKey(),
+      email: text("email").notNull().unique(),
+      status: text("status").notNull().default("pending"),
+      // "pending", "confirmed", "unsubscribed"
+      confirmationToken: text("confirmation_token"),
+      confirmedAt: timestamp("confirmed_at"),
+      subscribedAt: timestamp("subscribed_at").defaultNow().notNull(),
+      unsubscribedAt: timestamp("unsubscribed_at")
+    });
+    conversations = pgTable("conversations", {
+      id: serial("id").primaryKey(),
+      user1Id: integer("user1_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      user2Id: integer("user2_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      lastMessageAt: timestamp("last_message_at").defaultNow().notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    }, (table) => ({
+      // Ensure unique conversation between two users (works ONLY if application normalizes IDs)
+      uniqueUsers: unique().on(table.user1Id, table.user2Id),
+      // Performance index for sorting conversations by last message
+      lastMessageIdx: index("conversations_last_message_idx").on(table.lastMessageAt)
+    }));
+    messages = pgTable("messages", {
+      id: serial("id").primaryKey(),
+      conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
+      senderId: integer("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      receiverId: integer("receiver_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      content: text("content").notNull(),
+      imageUrl: text("image_url"),
+      // Optional image attachment
+      deleted: boolean("deleted").notNull().default(false),
+      // Soft delete
+      createdAt: timestamp("created_at").defaultNow().notNull()
+    }, (table) => ({
+      // Performance indexes for fetching messages
+      conversationIdx: index("messages_conversation_idx").on(table.conversationId),
+      createdAtIdx: index("messages_created_at_idx").on(table.createdAt),
+      // Composite index for conversation + timestamp (most common query)
+      conversationCreatedIdx: index("messages_conversation_created_idx").on(table.conversationId, table.createdAt)
+    }));
+    messageReads = pgTable("message_reads", {
+      id: serial("id").primaryKey(),
+      messageId: integer("message_id").notNull().references(() => messages.id, { onDelete: "cascade" }),
+      userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      readAt: timestamp("read_at").defaultNow().notNull()
+    }, (table) => ({
+      // One read record per user per message
+      uniqueUserMessage: unique().on(table.userId, table.messageId),
+      // Performance index for checking read status
+      messageIdx: index("message_reads_message_idx").on(table.messageId)
+    }));
+    adminMessageAudit = pgTable("admin_message_audit", {
+      id: serial("id").primaryKey(),
+      adminId: integer("admin_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      viewedUser1Id: integer("viewed_user1_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      viewedUser2Id: integer("viewed_user2_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+      viewedAt: timestamp("viewed_at").defaultNow().notNull()
+    });
     usersRelations = relations(users, ({ many }) => ({
       projects: many(projects),
       votes: many(votes),
-      comments: many(comments)
+      comments: many(comments),
+      sentMessages: many(messages, { relationName: "sentMessages" }),
+      receivedMessages: many(messages, { relationName: "receivedMessages" }),
+      messageReads: many(messageReads)
     }));
     projectsRelations = relations(projects, ({ one, many }) => ({
       user: one(users, {
@@ -198,16 +318,58 @@ var init_schema = __esm({
         references: [users.id]
       })
     }));
+    conversationsRelations = relations(conversations, ({ one, many }) => ({
+      user1: one(users, {
+        fields: [conversations.user1Id],
+        references: [users.id]
+      }),
+      user2: one(users, {
+        fields: [conversations.user2Id],
+        references: [users.id]
+      }),
+      messages: many(messages)
+    }));
+    messagesRelations = relations(messages, ({ one, many }) => ({
+      conversation: one(conversations, {
+        fields: [messages.conversationId],
+        references: [conversations.id]
+      }),
+      sender: one(users, {
+        fields: [messages.senderId],
+        references: [users.id],
+        relationName: "sentMessages"
+      }),
+      receiver: one(users, {
+        fields: [messages.receiverId],
+        references: [users.id],
+        relationName: "receivedMessages"
+      }),
+      reads: many(messageReads)
+    }));
+    messageReadsRelations = relations(messageReads, ({ one }) => ({
+      message: one(messages, {
+        fields: [messageReads.messageId],
+        references: [messages.id]
+      }),
+      user: one(users, {
+        fields: [messageReads.userId],
+        references: [users.id]
+      })
+    }));
     insertUserSchema = createInsertSchema(users).omit({
       id: true,
       createdAt: true,
-      termsAccepted: true,
       role: true,
       banned: true
     }).extend({
       email: z.string().email("Unesite validnu email adresu"),
       password: z.string().min(8, "Lozinka mora imati najmanje 8 karaktera"),
-      username: z.string().min(3, "Korisni\u010Dko ime mora imati najmanje 3 karaktera")
+      username: z.string().min(3, "Korisni\u010Dko ime mora imati najmanje 3 karaktera"),
+      termsAccepted: z.boolean({
+        required_error: "Morate prihvatiti uslove kori\u0161\u0107enja"
+      }).refine((val) => val === true, {
+        message: "Morate prihvatiti uslove kori\u0161\u0107enja"
+      })
     });
     insertProjectSchema = createInsertSchema(projects).omit({
       id: true,
@@ -256,13 +418,163 @@ var init_schema = __esm({
       artist: z.string().min(2, "Ime izvo\u0111a\u010Da mora imati najmanje 2 karaktera"),
       youtubeUrl: z.string().url("Unesite validan YouTube URL").regex(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//, "URL mora biti sa YouTube-a")
     });
+    insertUserSongSchema = createInsertSchema(userSongs).omit({
+      id: true,
+      userId: true,
+      submittedAt: true,
+      approved: true
+    }).extend({
+      songTitle: z.string().min(3, "Naslov pesme mora imati najmanje 3 karaktera").max(100, "Naslov pesme mo\u017Ee imati najvi\u0161e 100 karaktera"),
+      artistName: z.string().min(2, "Ime izvo\u0111a\u010Da mora imati najmanje 2 karaktera").max(100, "Ime izvo\u0111a\u010Da mo\u017Ee imati najvi\u0161e 100 karaktera"),
+      youtubeUrl: z.string().url("Unesite validan YouTube URL").regex(/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//, "URL mora biti sa YouTube-a")
+    });
+    insertNewsletterSubscriberSchema = createInsertSchema(newsletterSubscribers).omit({
+      id: true,
+      status: true,
+      confirmationToken: true,
+      confirmedAt: true,
+      subscribedAt: true,
+      unsubscribedAt: true
+    }).extend({
+      email: z.string().email("Unesite validnu email adresu")
+    });
+    insertMessageSchema = createInsertSchema(messages).omit({
+      id: true,
+      createdAt: true,
+      deleted: true
+    }).extend({
+      content: z.string().min(1, "Poruka ne mo\u017Ee biti prazna").max(5e3, "Poruka mo\u017Ee imati najvi\u0161e 5000 karaktera"),
+      imageUrl: z.string().url("Neva\u017Ee\u0107i URL").optional().or(z.literal(""))
+    });
+    contracts = pgTable("contracts", {
+      id: serial("id").primaryKey(),
+      contractNumber: varchar("contract_number", { length: 20 }).notNull().unique(),
+      contractType: varchar("contract_type", { length: 50 }).notNull(),
+      // "mix_master" | "copyright_transfer" | "instrumental_sale"
+      contractData: json("contract_data").notNull(),
+      // All contract-specific fields stored as JSON
+      pdfPath: text("pdf_path"),
+      // Path to generated PDF file
+      clientEmail: text("client_email"),
+      // Client's email for sending contract
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      createdBy: integer("created_by").notNull().references(() => users.id)
+      // Admin who created the contract
+    });
+    insertContractSchema = createInsertSchema(contracts).omit({
+      id: true,
+      createdAt: true
+    }).extend({
+      contractNumber: z.string().min(1, "Broj ugovora je obavezan"),
+      contractType: z.enum(["mix_master", "copyright_transfer", "instrumental_sale"]),
+      contractData: z.object({}).passthrough(),
+      // Accept any valid JSON object
+      clientEmail: z.string().email("Neva\u017Ee\u0107a email adresa").optional().or(z.literal(""))
+    });
+    mixMasterContractDataSchema = z.object({
+      contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+      contractPlace: z.string().min(1, "Mesto je obavezno"),
+      studioName: z.string().min(1, "Naziv studija je obavezan"),
+      studioAddress: z.string().min(1, "Adresa studija je obavezna"),
+      studioMaticniBroj: z.string().optional(),
+      clientName: z.string().min(1, "Ime klijenta je obavezno"),
+      clientAddress: z.string().min(1, "Adresa klijenta je obavezna"),
+      clientMaticniBroj: z.string().optional(),
+      projectName: z.string().min(1, "Naziv projekta je obavezan"),
+      channelCount: z.string().min(1, "Broj kanala je obavezan"),
+      deliveryFormat: z.string().min(1, "Format isporuke je obavezan"),
+      deliveryDate: z.string().min(1, "Rok isporuke je obavezan"),
+      totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+      advancePayment: z.string().min(1, "Avans je obavezan"),
+      remainingPayment: z.string().min(1, "Preostali iznos je obavezan"),
+      paymentMethod: z.string().min(1, "Na\u010Din pla\u0107anja je obavezan"),
+      vocalRecording: z.enum(["yes", "no"]),
+      vocalRights: z.enum(["client", "studio", "other"]).optional(),
+      vocalRightsOther: z.string().optional(),
+      jurisdiction: z.string().min(1, "Nadle\u017Eni sud je obavezan"),
+      copies: z.string().min(1, "Broj primeraka je obavezan"),
+      finalDate: z.string().min(1, "Zavr\u0161ni datum je obavezan")
+    });
+    copyrightTransferContractDataSchema = z.object({
+      contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+      contractPlace: z.string().min(1, "Mesto je obavezno"),
+      authorName: z.string().min(1, "Ime autora je obavezno"),
+      authorAddress: z.string().min(1, "Adresa autora je obavezna"),
+      authorMaticniBroj: z.string().optional(),
+      buyerName: z.string().min(1, "Ime kupca je obavezno"),
+      buyerAddress: z.string().min(1, "Adresa kupca je obavezna"),
+      buyerMaticniBroj: z.string().optional(),
+      songTitle: z.string().min(1, "Naziv pesme je obavezan"),
+      components: z.object({
+        text: z.boolean(),
+        music: z.boolean(),
+        vocals: z.boolean(),
+        mixMaster: z.boolean(),
+        other: z.boolean(),
+        otherText: z.string().optional()
+      }),
+      rightsType: z.enum(["exclusive", "nonexclusive"]),
+      rightsScope: z.object({
+        reproduction: z.boolean(),
+        distribution: z.boolean(),
+        performance: z.boolean(),
+        adaptation: z.boolean(),
+        other: z.boolean(),
+        otherText: z.string().optional()
+      }),
+      territory: z.string().min(1, "Teritorija je obavezna"),
+      duration: z.string().min(1, "Trajanje je obavezno"),
+      totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+      firstPayment: z.string().optional(),
+      firstPaymentDate: z.string().optional(),
+      secondPayment: z.string().optional(),
+      secondPaymentDate: z.string().optional(),
+      paymentMethod: z.string().min(1, "Na\u010Din pla\u0107anja je obavezan"),
+      authorPercentage: z.string().optional(),
+      buyerPercentage: z.string().optional(),
+      jurisdiction: z.string().min(1, "Nadle\u017Eni sud je obavezan"),
+      copies: z.string().min(1, "Broj primeraka je obavezan"),
+      finalDate: z.string().min(1, "Zavr\u0161ni datum je obavezan")
+    });
+    instrumentalSaleContractDataSchema = z.object({
+      contractDate: z.string().min(1, "Datum ugovora je obavezan"),
+      contractPlace: z.string().min(1, "Mesto je obavezno"),
+      authorName: z.string().min(1, "Ime autora je obavezno"),
+      authorAddress: z.string().min(1, "Adresa autora je obavezna"),
+      authorMaticniBroj: z.string().optional(),
+      buyerName: z.string().min(1, "Ime kupca je obavezno"),
+      buyerAddress: z.string().min(1, "Adresa kupca je obavezna"),
+      buyerMaticniBroj: z.string().optional(),
+      instrumentalName: z.string().min(1, "Naziv instrumentala je obavezan"),
+      duration: z.string().optional(),
+      rightsType: z.enum(["exclusive", "nonexclusive"]),
+      rightsScope: z.object({
+        reproduction: z.boolean(),
+        distribution: z.boolean(),
+        performance: z.boolean(),
+        adaptation: z.boolean(),
+        other: z.boolean(),
+        otherText: z.string().optional()
+      }),
+      territory: z.string().min(1, "Teritorija je obavezna"),
+      durationPeriod: z.string().min(1, "Trajanje je obavezno"),
+      totalAmount: z.string().min(1, "Ukupna naknada je obavezna"),
+      advancePayment: z.string().min(1, "Avans je obavezan"),
+      remainingPayment: z.string().min(1, "Preostali iznos je obavezan"),
+      paymentMethod: z.string().min(1, "Na\u010Din pla\u0107anja je obavezan"),
+      authorPercentage: z.string().optional(),
+      buyerPercentage: z.string().optional(),
+      jurisdiction: z.string().min(1, "Nadle\u017Eni sud je obavezan"),
+      copies: z.string().min(1, "Broj primeraka je obavezan"),
+      finalDate: z.string().min(1, "Zavr\u0161ni datum je obavezan")
+    });
   }
 });
 
 // server/index.ts
 import express2 from "express";
 import compression from "compression";
-import path4 from "path";
+import path5 from "path";
 
 // server/routes.ts
 import { createServer } from "http";
@@ -315,11 +627,11 @@ var DatabaseStorage = class {
     return user || void 0;
   }
   async getUserByEmail(email) {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(sql2`LOWER(${users.email}) = LOWER(${email})`);
     return user || void 0;
   }
   async getUserByUsername(username) {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(sql2`LOWER(${users.username}) = LOWER(${username})`);
     return user || void 0;
   }
   async createUser(insertUser) {
@@ -364,6 +676,55 @@ var DatabaseStorage = class {
     await db.update(users).set({ emailVerified: true, verificationCode: null }).where(eq(users.id, userId));
     return true;
   }
+  async setPasswordResetToken(userId, token) {
+    const expiry = new Date(Date.now() + 15 * 60 * 1e3);
+    await db.update(users).set({
+      passwordResetToken: token,
+      passwordResetExpiry: expiry
+    }).where(eq(users.id, userId));
+  }
+  async verifyPasswordResetToken(userId, token) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    if (!user || user.passwordResetToken !== token) {
+      return false;
+    }
+    if (!user.passwordResetExpiry || user.passwordResetExpiry < /* @__PURE__ */ new Date()) {
+      return false;
+    }
+    return true;
+  }
+  async updatePassword(userId, newPassword) {
+    await db.update(users).set({ password: newPassword }).where(eq(users.id, userId));
+  }
+  async clearPasswordResetToken(userId) {
+    await db.update(users).set({
+      passwordResetToken: null,
+      passwordResetExpiry: null
+    }).where(eq(users.id, userId));
+  }
+  async setAdminLoginToken(userId, token) {
+    const expiry = new Date(Date.now() + 15 * 60 * 1e3);
+    await db.update(users).set({
+      adminLoginToken: token,
+      adminLoginExpiry: expiry
+    }).where(eq(users.id, userId));
+  }
+  async verifyAdminLoginToken(userId, token) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (!user || user.adminLoginToken !== token) {
+      return false;
+    }
+    if (!user.adminLoginExpiry || user.adminLoginExpiry < /* @__PURE__ */ new Date()) {
+      return false;
+    }
+    return true;
+  }
+  async clearAdminLoginToken(userId) {
+    await db.update(users).set({
+      adminLoginToken: null,
+      adminLoginExpiry: null
+    }).where(eq(users.id, userId));
+  }
   async updateUserProfile(userId, data) {
     const updateData = {};
     if (data.username) {
@@ -379,6 +740,12 @@ var DatabaseStorage = class {
   }
   async updateUserPassword(userId, hashedPassword) {
     await db.update(users).set({ password: hashedPassword }).where(eq(users.id, userId));
+  }
+  async updateUserAvatar(userId, avatarUrl) {
+    await db.update(users).set({ avatarUrl }).where(eq(users.id, userId));
+  }
+  async updateUserLastSeen(userId) {
+    await db.update(users).set({ lastSeen: sql2`now()` }).where(eq(users.id, userId));
   }
   // Projects
   async createProject(data) {
@@ -605,6 +972,70 @@ var DatabaseStorage = class {
     const setting = await this.getSetting("giveaway_active");
     return { isActive: setting?.value === "true" };
   }
+  async getMaintenanceMode() {
+    const setting = await this.getSetting("maintenance_mode");
+    return setting?.value === "true";
+  }
+  async setMaintenanceMode(isActive) {
+    await this.setSetting("maintenance_mode", isActive.toString());
+  }
+  // Newsletter functions
+  async createNewsletterSubscriber(email, confirmationToken) {
+    const [subscriber] = await db.insert(newsletterSubscribers).values({
+      email: email.toLowerCase(),
+      confirmationToken,
+      status: "pending"
+    }).returning();
+    return subscriber;
+  }
+  async getNewsletterSubscriberByEmail(email) {
+    const [subscriber] = await db.select().from(newsletterSubscribers).where(sql2`LOWER(${newsletterSubscribers.email}) = LOWER(${email})`).limit(1);
+    return subscriber;
+  }
+  async getNewsletterSubscriberByToken(token) {
+    const [subscriber] = await db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.confirmationToken, token)).limit(1);
+    return subscriber;
+  }
+  async confirmNewsletterSubscription(token) {
+    const subscriber = await this.getNewsletterSubscriberByToken(token);
+    if (!subscriber || subscriber.status === "confirmed") {
+      return false;
+    }
+    await db.update(newsletterSubscribers).set({
+      status: "confirmed",
+      confirmedAt: /* @__PURE__ */ new Date(),
+      confirmationToken: null
+    }).where(eq(newsletterSubscribers.id, subscriber.id));
+    return true;
+  }
+  async unsubscribeNewsletter(email) {
+    const subscriber = await this.getNewsletterSubscriberByEmail(email);
+    if (!subscriber || subscriber.status === "unsubscribed") {
+      return false;
+    }
+    await db.update(newsletterSubscribers).set({
+      status: "unsubscribed",
+      unsubscribedAt: /* @__PURE__ */ new Date()
+    }).where(eq(newsletterSubscribers.id, subscriber.id));
+    return true;
+  }
+  async deleteNewsletterSubscriber(id) {
+    const result = await db.delete(newsletterSubscribers).where(eq(newsletterSubscribers.id, id)).returning();
+    return result.length > 0;
+  }
+  async getAllNewsletterSubscribers() {
+    return await db.select().from(newsletterSubscribers).orderBy(desc(newsletterSubscribers.subscribedAt));
+  }
+  async getConfirmedNewsletterSubscribers() {
+    return await db.select().from(newsletterSubscribers).where(eq(newsletterSubscribers.status, "confirmed")).orderBy(desc(newsletterSubscribers.confirmedAt));
+  }
+  async getNewsletterStats() {
+    const allSubscribers = await db.select().from(newsletterSubscribers).where(sql2`${newsletterSubscribers.status} != 'unsubscribed'`);
+    const total = allSubscribers.length;
+    const confirmed = allSubscribers.filter((s) => s.status === "confirmed").length;
+    const pending = allSubscribers.filter((s) => s.status === "pending").length;
+    return { total, confirmed, pending };
+  }
   // Video Spots
   async getVideoSpots() {
     return await db.select().from(videoSpots).orderBy(videoSpots.order, desc(videoSpots.createdAt));
@@ -626,6 +1057,99 @@ var DatabaseStorage = class {
     if (!result) throw new Error("Video spot not found");
     return result;
   }
+  // User Songs
+  async createUserSong(data) {
+    const [result] = await db.insert(userSongs).values({
+      userId: data.userId,
+      songTitle: data.songTitle,
+      artistName: data.artistName,
+      youtubeUrl: data.youtubeUrl
+    }).returning();
+    return result;
+  }
+  async getUserSongById(id) {
+    const [result] = await db.select().from(userSongs).where(eq(userSongs.id, id));
+    return result || void 0;
+  }
+  async getUserSongs(userId) {
+    return await db.select().from(userSongs).where(eq(userSongs.userId, userId)).orderBy(desc(userSongs.submittedAt));
+  }
+  async getAllUserSongs() {
+    const results = await db.select({
+      id: userSongs.id,
+      userId: userSongs.userId,
+      songTitle: userSongs.songTitle,
+      artistName: userSongs.artistName,
+      youtubeUrl: userSongs.youtubeUrl,
+      submittedAt: userSongs.submittedAt,
+      approved: userSongs.approved,
+      votesCount: userSongs.votesCount,
+      username: users.username
+    }).from(userSongs).leftJoin(users, eq(userSongs.userId, users.id)).orderBy(desc(userSongs.submittedAt));
+    return results.map((r) => ({
+      ...r,
+      username: r.username || "Unknown"
+    }));
+  }
+  async deleteUserSong(id) {
+    await db.delete(userSongs).where(eq(userSongs.id, id));
+  }
+  async approveUserSong(id) {
+    await db.update(userSongs).set({ approved: true }).where(eq(userSongs.id, id));
+  }
+  async getUserLastSongSubmissionTime(userId) {
+    const [result] = await db.select({ submittedAt: userSongs.submittedAt }).from(userSongs).where(eq(userSongs.userId, userId)).orderBy(desc(userSongs.submittedAt)).limit(1);
+    return result?.submittedAt || null;
+  }
+  async getApprovedUserSongs(userId) {
+    const results = await db.select({
+      id: userSongs.id,
+      userId: userSongs.userId,
+      songTitle: userSongs.songTitle,
+      artistName: userSongs.artistName,
+      youtubeUrl: userSongs.youtubeUrl,
+      submittedAt: userSongs.submittedAt,
+      approved: userSongs.approved,
+      votesCount: userSongs.votesCount,
+      username: users.username,
+      voteId: userId ? userSongVotes.id : sql2`NULL`
+    }).from(userSongs).leftJoin(users, eq(userSongs.userId, users.id)).leftJoin(
+      userSongVotes,
+      userId ? and(eq(userSongVotes.songId, userSongs.id), eq(userSongVotes.userId, userId)) : sql2`false`
+    ).where(eq(userSongs.approved, true)).orderBy(desc(userSongs.votesCount), desc(userSongs.submittedAt));
+    return results.map((r) => ({
+      id: r.id,
+      userId: r.userId,
+      songTitle: r.songTitle,
+      artistName: r.artistName,
+      youtubeUrl: r.youtubeUrl,
+      submittedAt: r.submittedAt,
+      approved: r.approved,
+      votesCount: r.votesCount,
+      username: r.username || "Unknown",
+      hasVoted: r.voteId !== null
+    }));
+  }
+  async toggleUserSongVote(userId, songId) {
+    return await db.transaction(async (tx) => {
+      const [existingVote] = await tx.select().from(userSongVotes).where(and(eq(userSongVotes.userId, userId), eq(userSongVotes.songId, songId)));
+      if (existingVote) {
+        await tx.delete(userSongVotes).where(eq(userSongVotes.id, existingVote.id));
+        await tx.update(userSongs).set({ votesCount: sql2`${userSongs.votesCount} - 1` }).where(eq(userSongs.id, songId));
+        const [updated] = await tx.select({ votesCount: userSongs.votesCount }).from(userSongs).where(eq(userSongs.id, songId));
+        return { voted: false, votesCount: updated?.votesCount || 0 };
+      } else {
+        await tx.insert(userSongVotes).values({ userId, songId });
+        await tx.update(userSongs).set({ votesCount: sql2`${userSongs.votesCount} + 1` }).where(eq(userSongs.id, songId));
+        const [updated] = await tx.select({ votesCount: userSongs.votesCount }).from(userSongs).where(eq(userSongs.id, songId));
+        return { voted: true, votesCount: updated?.votesCount || 1 };
+      }
+    });
+  }
+  async hasUserVotedForSong(userId, songId) {
+    const [result] = await db.select().from(userSongVotes).where(and(eq(userSongVotes.userId, userId), eq(userSongVotes.songId, songId)));
+    return !!result;
+  }
   // Admin methods
   async getAdminStats() {
     const [userCount] = await db.select({ count: sql2`count(*)` }).from(users);
@@ -645,8 +1169,307 @@ var DatabaseStorage = class {
     const newRole = user.role === "admin" ? "user" : "admin";
     await db.update(users).set({ role: newRole }).where(eq(users.id, userId));
   }
+  // Messaging methods
+  async searchUsers(query, currentUserId) {
+    const results = await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email
+    }).from(users).where(
+      and(
+        sql2`LOWER(${users.username}) LIKE LOWER(${`%${query}%`})`,
+        sql2`${users.id} != ${currentUserId}`,
+        eq(users.banned, false),
+        eq(users.emailVerified, true)
+      )
+    ).limit(10);
+    return results;
+  }
+  async getOrCreateConversation(user1Id, user2Id) {
+    const existing = await this.getConversation(user1Id, user2Id);
+    if (existing) return existing;
+    const [canonicalUser1, canonicalUser2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+    const [conversation] = await db.insert(conversations).values({ user1Id: canonicalUser1, user2Id: canonicalUser2 }).returning();
+    return conversation;
+  }
+  async getConversation(user1Id, user2Id) {
+    const [canonicalUser1, canonicalUser2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+    const [conversation] = await db.select().from(conversations).where(
+      and(
+        eq(conversations.user1Id, canonicalUser1),
+        eq(conversations.user2Id, canonicalUser2)
+      )
+    );
+    return conversation || void 0;
+  }
+  async getUserConversations(userId) {
+    const userConvos = await db.select().from(conversations).where(
+      sql2`${conversations.user1Id} = ${userId} OR ${conversations.user2Id} = ${userId}`
+    ).orderBy(desc(conversations.lastMessageAt));
+    const results = await Promise.all(
+      userConvos.map(async (convo) => {
+        const otherUserId = convo.user1Id === userId ? convo.user2Id : convo.user1Id;
+        const [otherUser] = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, otherUserId));
+        const [lastMsg] = await db.select().from(messages).where(eq(messages.conversationId, convo.id)).orderBy(desc(messages.createdAt)).limit(1);
+        const unreadMsgs = await db.select({ count: sql2`count(*)` }).from(messages).leftJoin(
+          messageReads,
+          and(
+            eq(messageReads.messageId, messages.id),
+            eq(messageReads.userId, userId)
+          )
+        ).where(
+          and(
+            eq(messages.conversationId, convo.id),
+            sql2`${messages.receiverId} = ${userId}`,
+            sql2`${messageReads.id} IS NULL`
+          )
+        );
+        return {
+          ...convo,
+          otherUser,
+          lastMessage: lastMsg || void 0,
+          unreadCount: Number(unreadMsgs[0]?.count ?? 0)
+        };
+      })
+    );
+    return results;
+  }
+  async sendMessage(senderId, receiverId, content, imageUrl) {
+    const conversation = await this.getOrCreateConversation(senderId, receiverId);
+    const [message] = await db.insert(messages).values({
+      conversationId: conversation.id,
+      senderId,
+      receiverId,
+      content,
+      imageUrl
+    }).returning();
+    await db.update(conversations).set({ lastMessageAt: /* @__PURE__ */ new Date() }).where(eq(conversations.id, conversation.id));
+    return message;
+  }
+  async getConversationMessages(conversationId, userId) {
+    const msgs = await db.select().from(messages).where(eq(messages.conversationId, conversationId)).orderBy(messages.createdAt);
+    return msgs;
+  }
+  async markMessagesAsRead(conversationId, userId) {
+    const unreadMessages = await db.select({ id: messages.id }).from(messages).leftJoin(
+      messageReads,
+      and(
+        eq(messageReads.messageId, messages.id),
+        eq(messageReads.userId, userId)
+      )
+    ).where(
+      and(
+        eq(messages.conversationId, conversationId),
+        eq(messages.receiverId, userId),
+        sql2`${messageReads.id} IS NULL`
+      )
+    );
+    for (const msg of unreadMessages) {
+      await db.insert(messageReads).values({
+        messageId: msg.id,
+        userId
+      });
+    }
+  }
+  async getUnreadMessageCount(userId) {
+    const [result] = await db.select({ count: sql2`count(*)` }).from(messages).leftJoin(
+      messageReads,
+      and(
+        eq(messageReads.messageId, messages.id),
+        eq(messageReads.userId, userId)
+      )
+    ).where(
+      and(
+        eq(messages.receiverId, userId),
+        sql2`${messageReads.id} IS NULL`
+      )
+    );
+    return Number(result?.count ?? 0);
+  }
+  async deleteMessage(messageId, userId) {
+    const [message] = await db.select().from(messages).where(eq(messages.id, messageId));
+    if (!message || message.senderId !== userId) {
+      return false;
+    }
+    await db.update(messages).set({ deleted: true }).where(eq(messages.id, messageId));
+    return true;
+  }
+  async adminGetAllConversations() {
+    const allConvos = await db.select().from(conversations).orderBy(desc(conversations.lastMessageAt));
+    const results = await Promise.all(
+      allConvos.map(async (convo) => {
+        const [user1] = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, convo.user1Id));
+        const [user2] = await db.select({ id: users.id, username: users.username, avatarUrl: users.avatarUrl }).from(users).where(eq(users.id, convo.user2Id));
+        const [msgCount] = await db.select({ count: sql2`count(*)` }).from(messages).where(eq(messages.conversationId, convo.id));
+        const [lastMsg] = await db.select({
+          content: messages.content,
+          senderId: messages.senderId,
+          deleted: messages.deleted
+        }).from(messages).where(eq(messages.conversationId, convo.id)).orderBy(desc(messages.createdAt)).limit(1);
+        let lastMessageSenderUsername = null;
+        if (lastMsg) {
+          const [sender] = await db.select({ username: users.username }).from(users).where(eq(users.id, lastMsg.senderId));
+          lastMessageSenderUsername = sender?.username || null;
+        }
+        return {
+          id: convo.id,
+          user1Id: convo.user1Id,
+          user2Id: convo.user2Id,
+          user1Username: user1?.username || "Unknown",
+          user2Username: user2?.username || "Unknown",
+          user1AvatarUrl: user1?.avatarUrl || null,
+          user2AvatarUrl: user2?.avatarUrl || null,
+          messageCount: Number(msgCount?.count ?? 0),
+          lastMessageAt: convo.lastMessageAt,
+          lastMessageContent: lastMsg?.content || null,
+          lastMessageSenderUsername,
+          lastMessageDeleted: lastMsg?.deleted || false
+        };
+      })
+    );
+    return results;
+  }
+  async adminGetConversationMessages(user1Id, user2Id) {
+    const conversation = await this.getConversation(user1Id, user2Id);
+    if (!conversation) return [];
+    const msgs = await db.select({
+      id: messages.id,
+      conversationId: messages.conversationId,
+      senderId: messages.senderId,
+      receiverId: messages.receiverId,
+      content: messages.content,
+      imageUrl: messages.imageUrl,
+      createdAt: messages.createdAt,
+      deleted: messages.deleted,
+      senderUsername: users.username
+    }).from(messages).leftJoin(users, eq(messages.senderId, users.id)).where(eq(messages.conversationId, conversation.id)).orderBy(messages.createdAt);
+    return msgs;
+  }
+  async adminDeleteMessage(messageId) {
+    await db.update(messages).set({ deleted: true }).where(eq(messages.id, messageId));
+    return true;
+  }
+  async adminLogConversationView(adminId, viewedUser1Id, viewedUser2Id) {
+    await db.insert(adminMessageAudit).values({
+      adminId,
+      viewedUser1Id,
+      viewedUser2Id
+    });
+  }
+  async adminGetAuditLogs() {
+    const logs = await db.select({
+      id: adminMessageAudit.id,
+      adminId: adminMessageAudit.adminId,
+      viewedUser1Id: adminMessageAudit.viewedUser1Id,
+      viewedUser2Id: adminMessageAudit.viewedUser2Id,
+      viewedAt: adminMessageAudit.viewedAt
+    }).from(adminMessageAudit).orderBy(desc(adminMessageAudit.viewedAt));
+    const results = await Promise.all(
+      logs.map(async (log2) => {
+        const [admin] = await db.select({ username: users.username }).from(users).where(eq(users.id, log2.adminId));
+        const [user1] = await db.select({ username: users.username }).from(users).where(eq(users.id, log2.viewedUser1Id));
+        const [user2] = await db.select({ username: users.username }).from(users).where(eq(users.id, log2.viewedUser2Id));
+        return {
+          ...log2,
+          adminUsername: admin?.username ?? "Unknown",
+          user1Username: user1?.username ?? "Unknown",
+          user2Username: user2?.username ?? "Unknown"
+        };
+      })
+    );
+    return results;
+  }
+  async adminExportConversation(user1Id, user2Id) {
+    const [smallerId, largerId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+    const conversation = await db.select().from(conversations).where(
+      and(
+        eq(conversations.user1Id, smallerId),
+        eq(conversations.user2Id, largerId)
+      )
+    ).limit(1);
+    if (!conversation[0]) {
+      throw new Error("Conversation not found");
+    }
+    const user1 = await db.select({ username: users.username }).from(users).where(eq(users.id, user1Id)).limit(1);
+    const user2 = await db.select({ username: users.username }).from(users).where(eq(users.id, user2Id)).limit(1);
+    if (!user1[0] || !user2[0]) {
+      throw new Error("Users not found");
+    }
+    const msgs = await db.select().from(messages).where(eq(messages.conversationId, conversation[0].id)).orderBy(messages.createdAt);
+    let txtContent = `Konverzacija izme\u0111u: ${user1[0].username} i ${user2[0].username}
+`;
+    txtContent += `Datum izvoza: ${(/* @__PURE__ */ new Date()).toLocaleString("sr-RS")}
+`;
+    txtContent += `Ukupno poruka: ${msgs.length}
+`;
+    txtContent += `
+${"=".repeat(60)}
+
+`;
+    for (const msg of msgs) {
+      const senderUsername = msg.senderId === user1Id ? user1[0].username : user2[0].username;
+      const timestamp2 = new Date(msg.createdAt).toLocaleString("sr-RS");
+      const deletedSuffix = msg.deleted ? " (OBRISANA)" : "";
+      const content = msg.deleted ? "[Poruka obrisana]" : msg.content;
+      txtContent += `[${timestamp2}] ${senderUsername}: ${content}${deletedSuffix}
+`;
+    }
+    return txtContent;
+  }
+  async adminGetMessagingStats() {
+    const [totalMessagesResult] = await db.select({ count: sql2`count(*)` }).from(messages);
+    const [totalConversationsResult] = await db.select({ count: sql2`count(*)` }).from(conversations);
+    const [deletedMessagesResult] = await db.select({ count: sql2`count(*)` }).from(messages).where(eq(messages.deleted, true));
+    const thirtyDaysAgo = /* @__PURE__ */ new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const [activeConversationsResult] = await db.select({ count: sql2`count(*)` }).from(conversations).where(sql2`${conversations.lastMessageAt} >= ${thirtyDaysAgo}`);
+    return {
+      totalMessages: Number(totalMessagesResult?.count ?? 0),
+      totalConversations: Number(totalConversationsResult?.count ?? 0),
+      deletedMessages: Number(deletedMessagesResult?.count ?? 0),
+      activeConversations: Number(activeConversationsResult?.count ?? 0)
+    };
+  }
+  // Contracts
+  async createContract(data) {
+    const [contract] = await db.insert(contracts).values(data).returning();
+    return contract;
+  }
+  async getAllContracts() {
+    return await db.select().from(contracts).orderBy(desc(contracts.createdAt));
+  }
+  async getContractById(id) {
+    const [contract] = await db.select().from(contracts).where(eq(contracts.id, id));
+    return contract || void 0;
+  }
+  async getNextContractNumber() {
+    const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
+    const yearSuffix = `${currentYear}`;
+    const [latestContract] = await db.select().from(contracts).where(sql2`${contracts.contractNumber} LIKE ${"%/" + yearSuffix}`).orderBy(desc(contracts.contractNumber)).limit(1);
+    if (!latestContract) {
+      return `001/${yearSuffix}`;
+    }
+    const parts = latestContract.contractNumber.split("/");
+    if (parts.length < 2 || !parts[0]) {
+      return `001/${yearSuffix}`;
+    }
+    const lastNumber = parseInt(parts[0]);
+    const nextNumber = lastNumber + 1;
+    return `${nextNumber.toString().padStart(3, "0")}/${yearSuffix}`;
+  }
+  async deleteContract(id) {
+    await db.delete(contracts).where(eq(contracts.id, id));
+  }
 };
 var storage = new DatabaseStorage();
+
+// server/websocket-helpers.ts
+var wsHelpers = {
+  broadcastToUser: null
+};
+function setBroadcastFunction(fn) {
+  wsHelpers.broadcastToUser = fn;
+}
 
 // server/routes.ts
 init_schema();
@@ -738,7 +1561,8 @@ function extractVerificationCode(html) {
 async function sendEmail({
   to,
   subject,
-  html
+  html,
+  attachments
 }) {
   const isDevelopment = process.env.NODE_ENV === "development";
   console.log("[RESEND] Sending email to:", to);
@@ -750,7 +1574,8 @@ async function sendEmail({
       from: fromEmail,
       to,
       subject,
-      html
+      html,
+      ...attachments && { attachments }
     });
     if (error) {
       const isTestModeError = error.message?.includes("only send testing emails") || error.message?.includes("verify a domain");
@@ -871,16 +1696,20 @@ function setupAuth(app2) {
     try {
       const { insertUserSchema: insertUserSchema2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
       const validatedData = insertUserSchema2.parse(req.body);
-      const existingUser = await storage.getUserByUsername(validatedData.username);
+      const normalizedEmail = validatedData.email.toLowerCase();
+      const normalizedUsername = validatedData.username.toLowerCase();
+      const existingUser = await storage.getUserByUsername(normalizedUsername);
       if (existingUser) {
         return res.status(400).send("Korisni\u010Dko ime ve\u0107 postoji");
       }
-      const existingEmail = await storage.getUserByEmail(validatedData.email);
+      const existingEmail = await storage.getUserByEmail(normalizedEmail);
       if (existingEmail) {
         return res.status(400).send("Email adresa ve\u0107 postoji");
       }
       const user = await storage.createUser({
         ...validatedData,
+        email: normalizedEmail,
+        username: normalizedUsername,
         password: await hashPassword(validatedData.password)
       });
       const verificationCode = generateVerificationCode();
@@ -939,13 +1768,88 @@ function setupAuth(app2) {
     const { password, ...userWithoutPassword } = req.user;
     res.json(userWithoutPassword);
   });
+  app2.post("/api/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ error: "Email je obavezan" });
+      }
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        console.log(`[AUTH] Password reset requested for non-existent email: ${email}`);
+        return res.json({ success: true, message: "Ako email postoji, kod za reset lozinke je poslat" });
+      }
+      const resetToken = generateVerificationCode();
+      await storage.setPasswordResetToken(user.id, resetToken);
+      console.log(`[AUTH] Password reset requested for: ${email}`);
+      console.log(`[AUTH] Reset code generated: ${resetToken}`);
+      try {
+        await sendEmail({
+          to: email,
+          subject: "Resetovanje Lozinke - Studio LeFlow",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #7c3aed;">Studio LeFlow</h2>
+              <h3>Zahtev za Resetovanje Lozinke</h3>
+              <p>Primili smo zahtev za resetovanje va\u0161e lozinke. Unesite slede\u0107i kod da biste kreirali novu lozinku:</p>
+              <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 30px 0; border-radius: 8px;">
+                <h1 style="color: #7c3aed; font-size: 36px; letter-spacing: 8px; margin: 0;">${resetToken}</h1>
+              </div>
+              <p>Ovaj kod isti\u010De za 15 minuta.</p>
+              <p>Ako niste zatra\u017Eili resetovanje lozinke, ignori\u0161ite ovaj email. Va\u0161a lozinka ne\u0107e biti promenjena.</p>
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+              <p style="color: #666; font-size: 12px;">Studio LeFlow - Profesionalna Muzi\u010Dka Produkcija</p>
+            </div>
+          `
+        });
+        console.log(`[AUTH] Password reset email sent successfully to ${email}`);
+      } catch (emailError) {
+        console.error("[AUTH] Failed to send password reset email:", emailError);
+        return res.status(500).json({
+          error: "Gre\u0161ka pri slanju email-a. Molimo poku\u0161ajte ponovo."
+        });
+      }
+      res.json({ success: true, message: "Ako email postoji, kod za reset lozinke je poslat" });
+    } catch (error) {
+      console.error("[AUTH] Forgot password error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/reset-password", async (req, res) => {
+    try {
+      const { email, token, newPassword } = req.body;
+      if (!email || !token || !newPassword) {
+        return res.status(400).json({ error: "Svi parametri su obavezni" });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ error: "Lozinka mora imati najmanje 8 karaktera" });
+      }
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ili istekao kod za reset lozinke" });
+      }
+      const isValid = await storage.verifyPasswordResetToken(user.id, token);
+      if (!isValid) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ili istekao kod za reset lozinke" });
+      }
+      const hashedPassword = await hashPassword(newPassword);
+      await storage.updatePassword(user.id, hashedPassword);
+      await storage.clearPasswordResetToken(user.id);
+      console.log(`[AUTH] Password successfully reset for user: ${email}`);
+      res.json({ success: true, message: "Lozinka je uspe\u0161no promenjena" });
+    } catch (error) {
+      console.error("[AUTH] Reset password error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
 }
 
 // server/routes.ts
 import multer from "multer";
 import fs from "fs";
-import path from "path";
+import path2 from "path";
 import { z as z2 } from "zod";
+import { randomBytes as randomBytes2 } from "crypto";
 import { createRouteHandler } from "uploadthing/express";
 
 // server/uploadthing.ts
@@ -985,14 +1889,418 @@ var uploadRouter = {
       fileUrl: file.url,
       fileName: file.name
     };
+  }),
+  // Avatar image uploader - Only image files allowed
+  avatarUploader: f({
+    "image/png": { maxFileSize: "4MB", maxFileCount: 1 },
+    "image/jpeg": { maxFileSize: "4MB", maxFileCount: 1 },
+    "image/webp": { maxFileSize: "4MB", maxFileCount: 1 }
+  }).middleware(async ({ req, res }) => {
+    if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+      throw new Error("Neautorizovan pristup");
+    }
+    const user = req.user;
+    return { userId: user.id, username: user.username };
+  }).onUploadComplete(async ({ metadata, file }) => {
+    console.log("Avatar upload complete!");
+    console.log("User ID:", metadata.userId);
+    console.log("File URL:", file.url);
+    return {
+      uploadedBy: metadata.userId,
+      fileUrl: file.url
+    };
   })
 };
+
+// server/pdf-generators.ts
+import PDFDocument from "pdfkit";
+import path from "path";
+function drawContractLogo(doc) {
+  try {
+    const logoPath = path.resolve(process.cwd(), "attached_assets", "logo", "studioleflow-transparent.png");
+    const logoWidth = 85;
+    const headerHeight = 100;
+    const headerTop = doc.page.margins.top;
+    const pageWidth = doc.page.width;
+    const leftMargin = doc.page.margins.left;
+    const rightMargin = doc.page.margins.right;
+    const logoX = (pageWidth - logoWidth) / 2;
+    doc.image(logoPath, logoX, headerTop + 10, {
+      width: logoWidth,
+      align: "center"
+    });
+    doc.fontSize(9).font("DejaVuSans").fillColor("#666666");
+    const infoY = headerTop + 70;
+    doc.text("Studio LeFlow | Beograd, Srbija", leftMargin, infoY, {
+      width: pageWidth - leftMargin - rightMargin,
+      align: "center"
+    });
+    const lineY = headerTop + headerHeight - 10;
+    doc.strokeColor("#cccccc").lineWidth(1).moveTo(leftMargin, lineY).lineTo(pageWidth - rightMargin, lineY).stroke();
+    doc.fillColor("#000000");
+    return headerTop + headerHeight + 10;
+  } catch (error) {
+    console.error("[PDF] Failed to load logo:", error);
+    return doc.page.margins.top + 20;
+  }
+}
+function generateMixMasterPDF(data) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 50, bottom: 50, left: 72, right: 72 }
+    });
+    doc.registerFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    doc.registerFont("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf");
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("error", reject);
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
+    doc.fontSize(14).font("DejaVuSans-Bold").text("UGOVOR O PRU\u017DANJU USLUGA MIXINGA I MASTERINGA", { align: "center" });
+    doc.moveDown(2);
+    doc.fontSize(10).font("DejaVuSans").text(`Zaklju\u010Den dana ${data.contractDate} godine u ${data.contractPlace}, izme\u0111u slede\u0107ih ugovornih strana:`, { align: "left" });
+    doc.moveDown();
+    doc.fontSize(11).font("DejaVuSans-Bold").text("1. Pru\u017Ealac usluge (Studio)");
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.studioName}`);
+    doc.text(`Adresa: ${data.studioAddress}`);
+    doc.text(`Mati\u010Dni broj: ${data.studioMaticniBroj}`);
+    doc.moveDown();
+    doc.fontSize(11).font("DejaVuSans-Bold").text("2. Naru\u010Dilac usluge");
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.clientName}`);
+    doc.text(`Adresa: ${data.clientAddress}`);
+    doc.text(`Mati\u010Dni broj: ${data.clientMaticniBroj}`);
+    doc.moveDown();
+    doc.fontSize(10).text('(u daljem tekstu zajedni\u010Dki: "Ugovorne strane").');
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 1. Predmet ugovora", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Predmet ovog ugovora je pru\u017Eanje usluge profesionalnog miksanja i masteringa slede\u0107eg muzi\u010Dkog dela:");
+    doc.moveDown(0.5);
+    doc.text(`Naziv pesme / projekta: ${data.projectName}`);
+    doc.text(`Broj kanala / stemova: ${data.channelCount}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 2. Obaveze Pru\u017Eaoca usluge", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Pru\u017Ealac usluge se obavezuje da:");
+    doc.text("\u2013 izvr\u0161i tehni\u010Dku obradu materijala (mix i mastering) prema profesionalnim standardima;");
+    doc.text(`\u2013 isporu\u010Di finalne fajlove u formatu: ${data.deliveryFormat}`);
+    doc.text(`\u2013 isporuku izvr\u0161i najkasnije do ${data.deliveryDate}.`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 3. Obaveze Naru\u010Dioca", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Naru\u010Dilac se obavezuje da:");
+    doc.text("\u2013 dostavi sve potrebne fajlove i informacije potrebne za rad na projektu;");
+    doc.text("\u2013 blagovremeno odobri radne verzije ili dostavi primedbe;");
+    doc.text("\u2013 isplati ugovorenu naknadu u predvi\u0111enom roku.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 4. Naknada i uslovi pla\u0107anja", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ukupna naknada za izvr\u0161enje usluge iznosi: ${data.totalAmount} RSD / EUR.`);
+    doc.moveDown(0.5);
+    doc.text("Raspored pla\u0107anja:");
+    doc.text(`\u2013 Avans (pre po\u010Detka rada): ${data.advancePayment} RSD / EUR`);
+    doc.text(`\u2013 Ostatak (po zavr\u0161etku usluge, pre isporuke finalnih fajlova): ${data.remainingPayment} RSD / EUR`);
+    doc.text(`Na\u010Din pla\u0107anja: ${data.paymentMethod}`);
+    doc.moveDown();
+    doc.text("U slu\u010Daju nepla\u0107anja u predvi\u0111enom roku, Pru\u017Ealac usluge zadr\u017Eava pravo da raskine ovaj ugovor i da snimke ponudi tre\u0107im licima ili koristi u druge svrhe, bez prava Naru\u010Dioca na naknadu \u0161tete.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 5. Odgovornost i reklamacije", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Pru\u017Ealac usluge garantuje kvalitet obrade prema profesionalnim standardima.");
+    doc.text("Naru\u010Dilac ima pravo na do dve runde revizija finalne verzije.");
+    doc.text("Naknadne izmene i dodatne revizije se napla\u0107uju po dogovoru.");
+    doc.text("Reklamacije se prihvataju isklju\u010Divo u roku od 7 dana od dana isporuke finalnih fajlova.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 6. Autorska prava", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Ovim ugovorom Pru\u017Ealac usluge ne sti\u010De nikakva autorska prava na muzi\u010Dko delo koje je predmet obrade.");
+    doc.text("Sva autorska prava na pesmu i originalne snimke ostaju u vlasni\u0161tvu Naru\u010Dioca.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 7. Snimanje vokala i prava na snimke", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Snimanje vokala je izvr\u0161eno u studiju LeFlow Studio: ${data.vocalRecording === "yes" ? "DA" : "NE"}`);
+    doc.moveDown(0.5);
+    if (data.vocalRecording === "yes") {
+      doc.text("Ugovorne strane se sla\u017Eu da:");
+      if (data.vocalRights === "client") {
+        doc.text("\u2611 Sva prava na vokalne snimke i izvedbu prenose se isklju\u010Divo na Naru\u010Dioca.");
+      } else if (data.vocalRights === "studio") {
+        doc.text("\u2611 Pru\u017Ealac usluge zadr\u017Eava pravo da koristi snimke isklju\u010Divo u promotivne svrhe studija (portfolio, sajt, dru\u0161tvene mre\u017Ee), uz obavezu navo\u0111enja imena izvo\u0111a\u010Da.");
+      } else {
+        doc.text(`\u2611 Drugo: ${data.vocalRightsOther || ""}`);
+      }
+    }
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 8. Nadle\u017Enost", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Za re\u0161avanje eventualnih sporova nadle\u017Ean je sud u: ${data.jurisdiction}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 9. Zavr\u0161ne odredbe", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ovaj ugovor je sa\u010Dinjen u ${data.copies} istovetnih primeraka, od kojih svaka ugovorna strana zadr\u017Eava po jedan.`);
+    doc.moveDown();
+    doc.text("Potpisivanjem ugovora, strane potvr\u0111uju da su saglasne sa svim odredbama i da ga zaklju\u010Duju slobodnom voljom.");
+    doc.moveDown(3);
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("____________________________", 100, doc.y, { continued: true, width: 200 });
+    doc.text("____________________________", 320, doc.y - doc.currentLineHeight(), { width: 200 });
+    doc.moveDown(0.3);
+    doc.text("Pru\u017Ealac usluge", 100, doc.y, { continued: true, width: 200 });
+    doc.text("Naru\u010Dilac usluge", 320, doc.y - doc.currentLineHeight(), { width: 200 });
+    doc.moveDown(2);
+    doc.text(`Datum: ${data.finalDate}`, { align: "center" });
+    doc.end();
+  });
+}
+function generateCopyrightTransferPDF(data) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 50, bottom: 50, left: 72, right: 72 }
+    });
+    doc.registerFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    doc.registerFont("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf");
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("error", reject);
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
+    doc.fontSize(14).font("DejaVuSans-Bold").text("UGOVOR O PRENOSU IMOVINSKIH AUTORSKIH PRAVA", { align: "center" });
+    doc.moveDown(2);
+    doc.fontSize(10).font("DejaVuSans").text(`Zaklju\u010Den dana ${data.contractDate} godine u ${data.contractPlace}, izme\u0111u slede\u0107ih ugovornih strana:`, { align: "left" });
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("1. Autor/Prodavac", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.authorName}`);
+    doc.text(`Adresa: ${data.authorAddress}`);
+    doc.text(`Mati\u010Dni broj: ${data.authorMaticniBroj}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("2. Kupac", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.buyerName}`);
+    doc.text(`Adresa: ${data.buyerAddress}`);
+    doc.text(`Mati\u010Dni broj: ${data.buyerMaticniBroj}`);
+    doc.moveDown();
+    doc.fontSize(10).text('(u daljem tekstu zajedni\u010Dki: "Ugovorne strane").');
+    doc.moveDown(3);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 1. Predmet ugovora", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Predmet ovog ugovora je prenos imovinskih autorskih prava na slede\u0107em autorskom delu:");
+    doc.moveDown(0.5);
+    doc.text(`Naziv pesme: ${data.songTitle}`);
+    doc.moveDown();
+    doc.text("Delo obuhvata slede\u0107e komponente:");
+    if (data.components.text) doc.text("\u2611 Tekst");
+    if (data.components.music) doc.text("\u2611 Muziku (instrumental)");
+    if (data.components.vocals) doc.text("\u2611 Snimanje vokala");
+    if (data.components.mixMaster) doc.text("\u2611 Miks i mastering");
+    if (data.components.other) doc.text(`\u2611 Ostalo: ${data.components.otherText || ""}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 2. Vrsta prenosa prava", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Autor prenosi slede\u0107a imovinska autorska prava:");
+    doc.text(data.rightsType === "exclusive" ? "\u2611 Isklju\u010Diva prava" : "\u2611 Neisklju\u010Diva prava");
+    doc.moveDown();
+    doc.text("Obuhvat prenosa prava:");
+    if (data.rightsScope.reproduction) doc.text("\u2611 Reprodukovanje i umno\u017Eavanje dela");
+    if (data.rightsScope.distribution) doc.text("\u2611 Distribucija i digitalna prodaja");
+    if (data.rightsScope.performance) doc.text("\u2611 Javno izvo\u0111enje i emitovanje");
+    if (data.rightsScope.adaptation) doc.text("\u2611 Prerada i adaptacija");
+    if (data.rightsScope.other) doc.text(`\u2611 Ostalo: ${data.rightsScope.otherText || ""}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 3. Teritorija kori\u0161\u0107enja", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Prenos prava se odnosi na teritoriju: ${data.territory}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 4. Trajanje prenosa prava", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Prenos prava se zaklju\u010Duje na period: ${data.duration}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 5. Naknada i uslovi pla\u0107anja", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Kupac se obavezuje da Autor/Prodavcu isplati ukupan iznos naknade u visini od: ${data.totalAmount} RSD / EUR`);
+    doc.moveDown();
+    doc.text("Raspored pla\u0107anja:");
+    doc.text(`\u2013 I rata u iznosu od ${data.firstPayment} RSD/EUR, do ${data.firstPaymentDate}`);
+    doc.text(`\u2013 II rata u iznosu od ${data.secondPayment} RSD/EUR, do ${data.secondPaymentDate}`);
+    doc.text("(U slu\u010Daju nepla\u0107anja u predvi\u0111enom roku, Autor zadr\u017Eava pravo da delo ponudi i proda tre\u0107im licima.)");
+    doc.moveDown();
+    doc.text(`Na\u010Din pla\u0107anja: ${data.paymentMethod}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 6. Podela prihoda od kori\u0161\u0107enja dela (Streaming servis)", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Ugovorne strane su saglasne da se prihod ostvaren od eksploatacije dela deli na slede\u0107i na\u010Din:");
+    doc.text(`\u2013 Procenat prihoda koji pripada Autor/Prodavcu: ${data.authorPercentage}%`);
+    doc.text(`\u2013 Procenat prihoda koji pripada Kupcu: ${data.buyerPercentage}%`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 7. Moralna prava", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Autor zadr\u017Eava moralna prava na delu, uklju\u010Duju\u0107i:");
+    doc.text("\u2013 Pravo da bude priznat i ozna\u010Den kao autor dela;");
+    doc.text("\u2013 Pravo da delo ne bude menjano, obra\u0111ivano ili prilago\u0111avano bez njegove prethodne pisane saglasnosti.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 8. Nadle\u017Enost", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Za tuma\u010Denje i sprovo\u0111enje ovog ugovora nadle\u017Ean je sud u: ${data.jurisdiction}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 9. Zavr\u0161ne odredbe", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ovaj ugovor je sa\u010Dinjen u ${data.copies} istovetnih primeraka, od kojih svaka ugovorna strana zadr\u017Eava po jedan.`);
+    doc.text("Potpisivanjem ugovora strane potvr\u0111uju da su saglasne sa svim odredbama i da ga zaklju\u010Duju slobodnom voljom.");
+    doc.moveDown(3);
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("____________________________", { align: "left" });
+    doc.text("Autor/Prodavac", { align: "left" });
+    doc.moveDown(2);
+    doc.text("____________________________", { align: "left" });
+    doc.text("Kupac", { align: "left" });
+    doc.moveDown(2);
+    doc.text(`Datum: ${data.finalDate}`, { align: "center" });
+    doc.end();
+  });
+}
+function generateInstrumentalSalePDF(data) {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 50, bottom: 50, left: 72, right: 72 }
+    });
+    doc.registerFont("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+    doc.registerFont("DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf");
+    const buffers = [];
+    doc.on("data", buffers.push.bind(buffers));
+    doc.on("end", () => resolve(Buffer.concat(buffers)));
+    doc.on("error", reject);
+    const bodyStartY = drawContractLogo(doc);
+    doc.y = bodyStartY;
+    doc.fontSize(14).font("DejaVuSans-Bold").text("LICENCA ZA KORI\u0160\u0106ENJE INSTRUMENTALA", { align: "center" });
+    doc.moveDown(2);
+    doc.fontSize(10).font("DejaVuSans").text(`Izdata dana ${data.contractDate} godine u ${data.contractPlace}`, { align: "left" });
+    doc.moveDown(2);
+    doc.fontSize(11).font("DejaVuSans-Bold").text("Izdava\u010D licence (Studio)");
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.authorName}`);
+    doc.text(`Adresa: ${data.authorAddress}`);
+    doc.moveDown(2);
+    doc.fontSize(11).font("DejaVuSans-Bold").text("Korisnik licence");
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ime i prezime / poslovno ime: ${data.buyerName}`);
+    doc.text(`Adresa: ${data.buyerAddress}`);
+    doc.text(`Mati\u010Dni broj: ${data.buyerMaticniBroj}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 1. Predmet licence", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Predmet ove licence je kori\u0161\u0107enje slede\u0107eg muzi\u010Dkog instrumentala:");
+    doc.moveDown(0.5);
+    doc.text(`Naziv instrumentala: ${data.instrumentalName}`);
+    doc.text(`Trajanje: ${data.duration}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 2. Vrsta licence", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Korisniku se izdaje slede\u0107a vrsta licence:");
+    doc.moveDown();
+    doc.text(data.rightsType === "exclusive" ? "\u2611 Isklju\u010Diva licenca" : "\u2611 Neisklju\u010Diva licenca");
+    doc.moveDown();
+    doc.text("Opseg dozvoljenog kori\u0161\u0107enja:");
+    if (data.rightsScope.reproduction) doc.text("\u2611 Reprodukovanje i umno\u017Eavanje");
+    if (data.rightsScope.distribution) doc.text("\u2611 Distribucija i digitalna prodaja");
+    if (data.rightsScope.performance) doc.text("\u2611 Javno izvo\u0111enje i emitovanje");
+    if (data.rightsScope.adaptation) doc.text("\u2611 Prerada i adaptacija");
+    if (data.rightsScope.other) doc.text(`\u2611 Ostalo: ${data.rightsScope.otherText || ""}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 3. Teritorija kori\u0161\u0107enja", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Licenca se odnosi na teritoriju: ${data.territory}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 4. Trajanje licence", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Licenca se izdaje na period: ${data.durationPeriod}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 5. Naknada za licencu", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ukupna naknada za licencu iznosi: ${data.totalAmount} RSD / EUR.`);
+    doc.moveDown();
+    doc.text("Raspored pla\u0107anja:");
+    doc.text(`\u2013 Avans: ${data.advancePayment} RSD / EUR`);
+    doc.text(`\u2013 Ostatak: ${data.remainingPayment} RSD / EUR`);
+    doc.moveDown();
+    doc.text(`Na\u010Din pla\u0107anja: ${data.paymentMethod}`);
+    doc.moveDown();
+    doc.text("U slu\u010Daju nepla\u0107anja u predvi\u0111enom roku, licenca postaje neva\u017Ee\u0107a.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 6. Podela prihoda od kori\u0161\u0107enja", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Prihod od kori\u0161\u0107enja instrumentala deli se na slede\u0107i na\u010Din:");
+    doc.text(`\u2013 Procenat prihoda koji pripada Izdava\u010Du: ${data.authorPercentage}%`);
+    doc.text(`\u2013 Procenat prihoda koji pripada Korisniku: ${data.buyerPercentage}%`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 7. Autorska prava", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("Izdava\u010D zadr\u017Eava sva autorska i moralna prava na instrumentalu, uklju\u010Duju\u0107i:");
+    doc.text("\u2013 Pravo da bude priznat i ozna\u010Den kao autor instrumentala.");
+    doc.text("\u2013 Pravo da instrumental ne bude menjan bez prethodne pisane saglasnosti.");
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 8. Nadle\u017Enost", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Za re\u0161avanje eventualnih sporova nadle\u017Ean je sud u: ${data.jurisdiction}`);
+    doc.moveDown(2);
+    doc.fontSize(12).font("DejaVuSans-Bold").text("\u010Clan 9. Va\u017Enost licence", { align: "center" });
+    doc.moveDown();
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text(`Ova licenca je izdata u ${data.copies} primerka i stupa na snagu danom pla\u0107anja naknade.`);
+    doc.moveDown();
+    doc.text("Kori\u0161\u0107enjem instrumentala, Korisnik potvr\u0111uje da prihvata sve uslove navedene u ovoj licenci.");
+    doc.moveDown(3);
+    doc.fontSize(10).font("DejaVuSans");
+    doc.text("____________________________", 100, doc.y, { continued: true, width: 200 });
+    doc.text("____________________________", 320, doc.y - doc.currentLineHeight(), { width: 200 });
+    doc.moveDown(0.3);
+    doc.text("Izdava\u010D licence (Studio)", 100, doc.y, { continued: true, width: 200 });
+    doc.text("Korisnik licence", 320, doc.y - doc.currentLineHeight(), { width: 200 });
+    doc.moveDown(2);
+    doc.text(`Datum izdavanja: ${data.finalDate}`, { align: "center" });
+    doc.end();
+  });
+}
 
 // server/routes.ts
 var multerUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
-      const uploadDir = path.join(process.cwd(), "attached_assets", "temp");
+      const uploadDir = path2.join(process.cwd(), "attached_assets", "temp");
       fs.mkdirSync(uploadDir, { recursive: true });
       cb(null, uploadDir);
     },
@@ -1022,6 +2330,18 @@ function escapeHtml(text2) {
   };
   return text2.replace(/[&<>"']/g, (m) => map[m] || m);
 }
+function sanitizeUser(user) {
+  const {
+    password,
+    verificationCode,
+    passwordResetToken,
+    passwordResetExpiry,
+    adminLoginToken,
+    adminLoginExpiry,
+    ...sanitized
+  } = user;
+  return sanitized;
+}
 var contactRateLimits = /* @__PURE__ */ new Map();
 var RATE_LIMIT_WINDOW = 60 * 60 * 1e3;
 var MAX_REQUESTS_PER_HOUR = 3;
@@ -1049,6 +2369,12 @@ function requireAdmin(req, res, next) {
   if (!req.isAuthenticated()) {
     return res.sendStatus(401);
   }
+  if (req.user.banned) {
+    return res.status(403).json({
+      error: "Va\u0161 nalog je suspendovan. Kontaktirajte administratora za vi\u0161e informacija.",
+      banned: true
+    });
+  }
   if (req.user.role !== "admin") {
     return res.status(403).json({ error: "Samo administratori mogu pristupiti ovoj funkcionalnosti" });
   }
@@ -1058,6 +2384,12 @@ function requireVerifiedEmail(req, res, next) {
   if (!req.isAuthenticated()) {
     return res.sendStatus(401);
   }
+  if (req.user.banned) {
+    return res.status(403).json({
+      error: "Va\u0161 nalog je suspendovan. Kontaktirajte administratora za vi\u0161e informacija.",
+      banned: true
+    });
+  }
   if (!req.user.emailVerified) {
     return res.status(403).json({
       error: "Morate verifikovati email adresu da biste pristupili ovoj funkcionalnosti",
@@ -1066,8 +2398,61 @@ function requireVerifiedEmail(req, res, next) {
   }
   next();
 }
+async function checkMaintenanceMode(req, res, next) {
+  const allowedPaths = [
+    "/maintenance",
+    "/login",
+    "/logout",
+    "/user",
+    "/register",
+    "/verify-email",
+    "/forgot-password",
+    "/reset-password",
+    "/admin",
+    "/admin-login-request",
+    "/admin-login-verify"
+  ];
+  const isAllowedPath = allowedPaths.some((path6) => req.path.startsWith(path6));
+  if (isAllowedPath) {
+    return next();
+  }
+  if (req.isAuthenticated() && req.user.role === "admin") {
+    return next();
+  }
+  const isMaintenanceMode = await storage.getMaintenanceMode();
+  if (isMaintenanceMode) {
+    return res.status(503).json({
+      error: "Sajt je trenutno u pripremi",
+      maintenanceMode: true
+    });
+  }
+  next();
+}
 async function registerRoutes(app2) {
   setupAuth(app2);
+  app2.get("/api/maintenance", async (_req, res) => {
+    try {
+      const isActive = await storage.getMaintenanceMode();
+      res.json({ maintenanceMode: isActive });
+    } catch (error) {
+      console.error("Error getting maintenance mode:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/maintenance", requireAdmin, async (req, res) => {
+    try {
+      const { maintenanceMode } = req.body;
+      if (typeof maintenanceMode !== "boolean") {
+        return res.status(400).json({ error: "maintenanceMode mora biti boolean" });
+      }
+      await storage.setMaintenanceMode(maintenanceMode);
+      console.log(`[ADMIN] Maintenance mode ${maintenanceMode ? "aktiviran" : "deaktiviran"} od strane ${req.user.username}`);
+      res.json({ success: true, maintenanceMode });
+    } catch (error) {
+      console.error("Error setting maintenance mode:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
   app2.get("/api/debug/verification-code", (req, res) => {
     if (process.env.NODE_ENV !== "development") {
       return res.status(404).json({ error: "Not found" });
@@ -1095,6 +2480,7 @@ async function registerRoutes(app2) {
       }
     })
   );
+  app2.use("/api", checkMaintenanceMode);
   app2.post("/api/upload-image", requireAdmin, multerUpload.single("file"), async (req, res) => {
     try {
       if (!req.file) {
@@ -1102,9 +2488,9 @@ async function registerRoutes(app2) {
       }
       const tempPath = req.file.path;
       const fileName = req.file.filename;
-      const permanentDir = path.join(process.cwd(), "attached_assets", "cms_images");
+      const permanentDir = path2.join(process.cwd(), "attached_assets", "cms_images");
       fs.mkdirSync(permanentDir, { recursive: true });
-      const permanentPath = path.join(permanentDir, fileName);
+      const permanentPath = path2.join(permanentDir, fileName);
       fs.renameSync(tempPath, permanentPath);
       const url = `/attached_assets/cms_images/${fileName}`;
       res.json({ url });
@@ -1183,6 +2569,99 @@ async function registerRoutes(app2) {
       return res.status(500).json({ error: "Gre\u0161ka na serveru" });
     }
   });
+  app2.post("/api/admin-login-request", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "Korisni\u010Dko ime ili email i lozinka su obavezni" });
+      }
+      const isEmail = username.includes("@");
+      const user = isEmail ? await storage.getUserByEmail(username) : await storage.getUserByUsername(username);
+      if (!user) {
+        console.log(`[Admin Login] Failed: User not found (${username})`);
+        return res.status(401).json({ error: "Neispravno korisni\u010Dko ime ili lozinka" });
+      }
+      const validPassword = await comparePasswords(password, user.password);
+      if (!validPassword) {
+        console.log(`[Admin Login] Failed: Invalid password for user ${user.username}`);
+        return res.status(401).json({ error: "Neispravno korisni\u010Dko ime ili lozinka" });
+      }
+      if (user.role !== "admin") {
+        console.log(`[Admin Login] Failed: User ${user.username} is not admin (role: ${user.role})`);
+        return res.status(401).json({ error: "Neispravno korisni\u010Dko ime ili lozinka" });
+      }
+      if (user.banned) {
+        console.log(`[Admin Login] Failed: User ${user.username} is banned`);
+        return res.status(401).json({ error: "Neispravno korisni\u010Dko ime ili lozinka" });
+      }
+      const verificationCode = Math.floor(1e5 + Math.random() * 9e5).toString();
+      await storage.setAdminLoginToken(user.id, verificationCode);
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Verifikacioni Kod Za Admin Prijavu - Studio LeFlow",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #7c3aed;">Studio LeFlow - Admin Prijava</h2>
+              <h3>Verifikacioni Kod</h3>
+              <p>Poku\u0161aj prijave na admin panel. Ako ovo niste Vi, ignori\u0161ite ovaj email.</p>
+              <div style="background-color: #f3f4f6; padding: 20px; text-align: center; margin: 30px 0; border-radius: 8px;">
+                <h1 style="color: #7c3aed; font-size: 36px; letter-spacing: 8px; margin: 0;">${verificationCode}</h1>
+              </div>
+              <p>Ovaj kod isti\u010De za 15 minuta.</p>
+              <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+              <p style="color: #666; font-size: 12px;">Studio LeFlow - Profesionalna Muzi\u010Dka Produkcija</p>
+            </div>
+          `
+        });
+        return res.json({
+          success: true,
+          message: "Verifikacioni kod je poslat na Va\u0161 email",
+          userId: user.id
+        });
+      } catch (emailError) {
+        console.error("Gre\u0161ka pri slanju emaila:", emailError);
+        return res.status(500).json({ error: "Gre\u0161ka pri slanju emaila" });
+      }
+    } catch (error) {
+      console.error("Admin login request error:", error);
+      return res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/admin-login-verify", async (req, res) => {
+    try {
+      const { userId, code } = req.body;
+      if (!userId || !code) {
+        return res.status(400).json({ error: "Svi podaci su obavezni" });
+      }
+      const isValid = await storage.verifyAdminLoginToken(userId, code);
+      if (!isValid) {
+        return res.status(401).json({ error: "Neispravan ili istekao kod" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      }
+      if (user.role !== "admin") {
+        return res.status(403).json({ error: "Nemate admin privilegije" });
+      }
+      if (user.banned) {
+        return res.status(403).json({ error: "Va\u0161 nalog je banovan" });
+      }
+      await storage.clearAdminLoginToken(userId);
+      req.login(user, (err) => {
+        if (err) {
+          console.error("Login error:", err);
+          return res.status(500).json({ error: "Gre\u0161ka pri prijavljivanju" });
+        }
+        const { password, verificationCode, adminLoginToken, ...userWithoutSensitiveData } = user;
+        res.json({ success: true, user: userWithoutSensitiveData });
+      });
+    } catch (error) {
+      console.error("Admin login verify error:", error);
+      return res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
   app2.post("/api/contact", async (req, res) => {
     try {
       const clientIp = getClientIp(req);
@@ -1233,6 +2712,183 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Gre\u0161ka na serveru" });
     }
   });
+  app2.post("/api/newsletter/subscribe", async (req, res) => {
+    try {
+      const { email } = insertNewsletterSubscriberSchema.parse(req.body);
+      const existingSubscriber = await storage.getNewsletterSubscriberByEmail(email);
+      if (existingSubscriber) {
+        if (existingSubscriber.status === "confirmed") {
+          return res.status(400).json({ error: "Email je ve\u0107 prijavljen na newsletter" });
+        } else if (existingSubscriber.status === "pending") {
+          return res.status(400).json({ error: "Email ve\u0107 postoji - proverite inbox za link za potvrdu" });
+        } else if (existingSubscriber.status === "unsubscribed") {
+          const confirmationToken2 = randomBytes2(32).toString("hex");
+          await storage.createNewsletterSubscriber(email, confirmationToken2);
+          try {
+            const baseUrl = process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS}` : "http://localhost:5000";
+            const confirmUrl = `${baseUrl}/newsletter/potvrda/${confirmationToken2}`;
+            await sendEmail({
+              to: email,
+              subject: "Potvrdite prijavu na Studio LeFlow newsletter",
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <div style="background-color: #4542f5; padding: 30px; text-align: center;">
+                    <h1 style="color: white; margin: 0;">Studio LeFlow</h1>
+                  </div>
+                  <div style="padding: 30px; background-color: #ffffff;">
+                    <h2 style="color: #333;">Potvrdite svoju email adresu</h2>
+                    <p>Hvala \u0161to ste se prijavili na Studio LeFlow newsletter!</p>
+                    <p>Kliknite na dugme ispod da potvrdite svoju email adresu:</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="${confirmUrl}" style="background-color: #4542f5; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Potvrdi email</a>
+                    </div>
+                    <p style="color: #666; font-size: 14px;">Ili kopirajte i nalepite ovaj link u pretra\u017Eiva\u010D:</p>
+                    <p style="color: #4542f5; word-break: break-all; font-size: 12px;">${confirmUrl}</p>
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #666; font-size: 12px;">Ako niste zatra\u017Eili prijavu na newsletter, ignori\u0161ite ovaj email.</p>
+                  </div>
+                </div>
+              `
+            });
+          } catch (emailError) {
+            console.error("Gre\u0161ka pri slanju confirmation email-a:", emailError);
+            return res.status(500).json({ error: "Gre\u0161ka pri slanju email-a za potvrdu" });
+          }
+          return res.json({ message: "Uspe\u0161no! Proverite email za link za potvrdu" });
+        }
+      }
+      const confirmationToken = randomBytes2(32).toString("hex");
+      await storage.createNewsletterSubscriber(email, confirmationToken);
+      try {
+        const baseUrl = process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS}` : "http://localhost:5000";
+        const confirmUrl = `${baseUrl}/newsletter/potvrda/${confirmationToken}`;
+        await sendEmail({
+          to: email,
+          subject: "Potvrdite prijavu na Studio LeFlow newsletter",
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="background-color: #4542f5; padding: 30px; text-align: center;">
+                <h1 style="color: white; margin: 0;">Studio LeFlow</h1>
+              </div>
+              <div style="padding: 30px; background-color: #ffffff;">
+                <h2 style="color: #333;">Potvrdite svoju email adresu</h2>
+                <p>Hvala \u0161to ste se prijavili na Studio LeFlow newsletter!</p>
+                <p>Kliknite na dugme ispod da potvrdite svoju email adresu:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                  <a href="${confirmUrl}" style="background-color: #4542f5; color: white; padding: 15px 40px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Potvrdi email</a>
+                </div>
+                <p style="color: #666; font-size: 14px;">Ili kopirajte i nalepite ovaj link u pretra\u017Eiva\u010D:</p>
+                <p style="color: #4542f5; word-break: break-all; font-size: 12px;">${confirmUrl}</p>
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+                <p style="color: #666; font-size: 12px;">Ako niste zatra\u017Eili prijavu na newsletter, ignori\u0161ite ovaj email.</p>
+              </div>
+            </div>
+          `
+        });
+      } catch (emailError) {
+        console.error("Gre\u0161ka pri slanju confirmation email-a:", emailError);
+        return res.status(500).json({ error: "Gre\u0161ka pri slanju email-a za potvrdu" });
+      }
+      res.json({ message: "Uspe\u0161no! Proverite email za link za potvrdu" });
+    } catch (error) {
+      if (error.name === "ZodError") {
+        res.status(400).json({ error: "Unesite validnu email adresu" });
+      } else {
+        console.error("Newsletter subscribe error:", error);
+        res.status(500).json({ error: "Gre\u0161ka na serveru" });
+      }
+    }
+  });
+  app2.get("/api/newsletter/confirm/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      const success = await storage.confirmNewsletterSubscription(token);
+      if (!success) {
+        return res.status(400).json({ error: "Link za potvrdu je neva\u017Ee\u0107i ili je ve\u0107 iskori\u0161\u0107en" });
+      }
+      res.json({ message: "Email uspe\u0161no potvr\u0111en! Hvala \u0161to ste se prijavili na na\u0161 newsletter" });
+    } catch (error) {
+      console.error("Newsletter confirm error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/newsletter/unsubscribe", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email je obavezan" });
+      }
+      const success = await storage.unsubscribeNewsletter(email);
+      if (!success) {
+        return res.status(400).json({ error: "Email nije prona\u0111en u listi pretplatnika" });
+      }
+      res.json({ message: "Uspe\u0161no ste se odjavili sa newslettera" });
+    } catch (error) {
+      console.error("Newsletter unsubscribe error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/newsletter/subscribers", requireAdmin, async (_req, res) => {
+    try {
+      const subscribers = await storage.getAllNewsletterSubscribers();
+      res.json(subscribers);
+    } catch (error) {
+      console.error("Newsletter subscribers error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/newsletter/stats", requireAdmin, async (_req, res) => {
+    try {
+      const stats = await storage.getNewsletterStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Newsletter stats error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.delete("/api/newsletter/subscribers/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID" });
+      }
+      const success = await storage.deleteNewsletterSubscriber(id);
+      if (!success) {
+        return res.status(404).json({ error: "Pretplatnik nije prona\u0111en" });
+      }
+      res.json({ message: "Pretplatnik je uspe\u0161no uklonjen" });
+    } catch (error) {
+      console.error("Delete newsletter subscriber error:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/newsletter/send", requireAdmin, async (req, res) => {
+    try {
+      const { subject, htmlContent } = req.body;
+      if (!subject || !htmlContent) {
+        return res.status(400).json({ error: "Subject i sadr\u017Eaj su obavezni" });
+      }
+      const subscribers = await storage.getConfirmedNewsletterSubscribers();
+      if (subscribers.length === 0) {
+        return res.status(400).json({ error: "Nema potvr\u0111enih pretplatnika" });
+      }
+      const emailPromises = subscribers.map(
+        (subscriber) => sendEmail({
+          to: subscriber.email,
+          subject,
+          html: htmlContent
+        })
+      );
+      await Promise.all(emailPromises);
+      res.json({
+        message: `Newsletter uspe\u0161no poslat na ${subscribers.length} email adresa`,
+        count: subscribers.length
+      });
+    } catch (error) {
+      console.error("Send newsletter error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri slanju newslettera" });
+    }
+  });
   app2.post("/api/user/accept-terms", requireVerifiedEmail, async (req, res) => {
     try {
       await storage.acceptTerms(req.user.id);
@@ -1243,15 +2899,17 @@ async function registerRoutes(app2) {
   });
   app2.put("/api/user/update-profile", requireVerifiedEmail, async (req, res) => {
     try {
-      const { username, email } = req.body;
+      let { username, email } = req.body;
       const userId = req.user.id;
+      if (email) email = email.toLowerCase();
+      if (username) username = username.toLowerCase();
       if (username && username.trim().length < 3) {
         return res.status(400).json({ error: "Korisni\u010Dko ime mora imati najmanje 3 karaktera" });
       }
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         return res.status(400).json({ error: "Unesite validnu email adresu" });
       }
-      if (username && username !== req.user.username) {
+      if (username && username !== req.user.username.toLowerCase()) {
         const user = await storage.getUser(userId);
         if (user?.usernameLastChanged) {
           const daysSinceLastChange = Math.floor(
@@ -1268,7 +2926,7 @@ async function registerRoutes(app2) {
           return res.status(400).json({ error: "Korisni\u010Dko ime je ve\u0107 zauzeto" });
         }
       }
-      if (email && email !== req.user.email) {
+      if (email && email !== req.user.email.toLowerCase()) {
         const existingUser = await storage.getUserByEmail(email);
         if (existingUser && existingUser.id !== userId) {
           return res.status(400).json({ error: "Email adresa je ve\u0107 zauzeta" });
@@ -1276,7 +2934,10 @@ async function registerRoutes(app2) {
       }
       await storage.updateUserProfile(userId, { username, email });
       const updatedUser = await storage.getUser(userId);
-      res.json(updatedUser);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      }
+      res.json(sanitizeUser(updatedUser));
     } catch (error) {
       console.error("Update profile error:", error);
       res.status(500).json({ error: error.message || "Gre\u0161ka na serveru" });
@@ -1305,6 +2966,44 @@ async function registerRoutes(app2) {
       res.json({ message: "Lozinka je uspe\u0161no promenjena" });
     } catch (error) {
       console.error("Change password error:", error);
+      res.status(500).json({ error: error.message || "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.put("/api/user/avatar", async (req, res) => {
+    try {
+      const { avatarUrl } = req.body;
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Neautorizovan pristup" });
+      }
+      if (!avatarUrl || typeof avatarUrl !== "string") {
+        return res.status(400).json({ error: "Avatar URL je obavezan" });
+      }
+      await storage.updateUserAvatar(userId, avatarUrl);
+      const updatedUser = await storage.getUser(userId);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      }
+      res.json(sanitizeUser(updatedUser));
+    } catch (error) {
+      console.error("Update avatar error:", error);
+      res.status(500).json({ error: error.message || "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.delete("/api/user/avatar", async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Neautorizovan pristup" });
+      }
+      await storage.updateUserAvatar(userId, null);
+      const updatedUser = await storage.getUser(userId);
+      if (!updatedUser) {
+        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      }
+      res.json(sanitizeUser(updatedUser));
+    } catch (error) {
+      console.error("Remove avatar error:", error);
       res.status(500).json({ error: error.message || "Gre\u0161ka na serveru" });
     }
   });
@@ -1640,12 +3339,12 @@ async function registerRoutes(app2) {
         section: req.body.section,
         assetKey: req.body.assetKey
       });
-      const cmsDir = path.join(process.cwd(), "attached_assets", "cms", metadata.page);
+      const cmsDir = path2.join(process.cwd(), "attached_assets", "cms", metadata.page);
       await fs.promises.mkdir(cmsDir, { recursive: true });
-      const ext = path.extname(req.file.originalname);
+      const ext = path2.extname(req.file.originalname);
       const filename = `${metadata.page}-${metadata.section}-${metadata.assetKey}-${Date.now()}${ext}`;
       const filePath = `attached_assets/cms/${metadata.page}/${filename}`;
-      const fullPath = path.join(process.cwd(), filePath);
+      const fullPath = path2.join(process.cwd(), filePath);
       await fs.promises.rename(req.file.path, fullPath);
       const mediaEntry = await storage.upsertCmsMedia({
         ...metadata,
@@ -1735,6 +3434,119 @@ async function registerRoutes(app2) {
       res.status(500).json({ error: "Gre\u0161ka na serveru" });
     }
   });
+  app2.post("/api/user-songs", requireVerifiedEmail, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const validated = insertUserSongSchema.parse(req.body);
+      const lastSubmissionTime = await storage.getUserLastSongSubmissionTime(userId);
+      if (lastSubmissionTime) {
+        const hoursSinceLastSubmission = (Date.now() - lastSubmissionTime.getTime()) / (1e3 * 60 * 60);
+        if (hoursSinceLastSubmission < 36) {
+          const hoursRemaining = Math.ceil(36 - hoursSinceLastSubmission);
+          return res.status(429).json({
+            error: `Mo\u017Eete postaviti novu pesmu za ${hoursRemaining} ${hoursRemaining === 1 ? "sat" : hoursRemaining < 5 ? "sata" : "sati"}`,
+            hoursRemaining
+          });
+        }
+      }
+      const newSong = await storage.createUserSong({
+        userId,
+        songTitle: validated.songTitle,
+        artistName: validated.artistName,
+        youtubeUrl: validated.youtubeUrl
+      });
+      res.json(newSong);
+    } catch (error) {
+      if (error.name === "ZodError") {
+        return res.status(400).json({ error: "Validacija nije uspela", details: error.errors });
+      }
+      if (error.message?.includes("duplicate") || error.code === "23505") {
+        return res.status(409).json({ error: "Ova pesma je ve\u0107 postavljena" });
+      }
+      console.error("Error creating user song:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/user-songs", requireVerifiedEmail, async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const songs = await storage.getUserSongs(userId);
+      res.json(songs);
+    } catch (error) {
+      console.error("Error fetching user songs:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/user-songs/all", requireAdmin, async (req, res) => {
+    try {
+      const songs = await storage.getAllUserSongs();
+      res.json(songs);
+    } catch (error) {
+      console.error("Error fetching all user songs:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.delete("/api/user-songs/:id", requireVerifiedEmail, async (req, res) => {
+    try {
+      const songId = parseInt(req.params.id);
+      const userId = req.user.id;
+      const isAdmin = req.user.role === "admin";
+      if (isNaN(songId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID" });
+      }
+      if (!isAdmin) {
+        const song = await storage.getUserSongById(songId);
+        if (!song) {
+          return res.status(404).json({ error: "Pesma nije prona\u0111ena" });
+        }
+        if (song.userId !== userId) {
+          return res.status(403).json({ error: "Nemate dozvolu da obri\u0161ete ovu pesmu" });
+        }
+      }
+      await storage.deleteUserSong(songId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting user song:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/user-songs/:id/approve", requireAdmin, async (req, res) => {
+    try {
+      const songId = parseInt(req.params.id);
+      if (isNaN(songId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID" });
+      }
+      await storage.approveUserSong(songId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error approving user song:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.get("/api/user-songs/public", async (req, res) => {
+    try {
+      const userId = req.user?.id;
+      const songs = await storage.getApprovedUserSongs(userId);
+      res.json(songs);
+    } catch (error) {
+      console.error("Error fetching public user songs:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
+  app2.post("/api/user-songs/:id/vote", requireVerifiedEmail, async (req, res) => {
+    try {
+      const songId = parseInt(req.params.id);
+      const userId = req.user.id;
+      if (isNaN(songId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID" });
+      }
+      const result = await storage.toggleUserSongVote(userId, songId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error toggling song vote:", error);
+      res.status(500).json({ error: "Gre\u0161ka na serveru" });
+    }
+  });
   app2.get("/robots.txt", (req, res) => {
     const host = req.get("host") || "localhost:5000";
     const protocol = req.protocol || "https";
@@ -1793,6 +3605,487 @@ Sitemap: ${siteUrl}/sitemap.xml
     res.type("application/xml");
     res.send(sitemap);
   });
+  app2.get("/api/users/search", requireVerifiedEmail, async (req, res) => {
+    try {
+      const { q } = req.query;
+      if (!q || typeof q !== "string" || q.trim().length < 2) {
+        return res.status(400).json({ error: "Query mora imati najmanje 2 karaktera" });
+      }
+      const results = await storage.searchUsers(q.trim(), req.user.id);
+      res.json(results);
+    } catch (error) {
+      console.error("[MESSAGING] User search error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri pretrazi korisnika" });
+    }
+  });
+  app2.get("/api/users/:id", requireVerifiedEmail, async (req, res) => {
+    try {
+      const userId = parseInt(req.params.id);
+      if (isNaN(userId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID korisnika" });
+      }
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "Korisnik nije prona\u0111en" });
+      }
+      const sanitized = sanitizeUser(user);
+      res.json(sanitized);
+    } catch (error) {
+      console.error("[MESSAGING] Get user error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju korisnika" });
+    }
+  });
+  app2.get("/api/conversations", requireVerifiedEmail, async (req, res) => {
+    try {
+      const conversations2 = await storage.getUserConversations(req.user.id);
+      res.json(conversations2);
+    } catch (error) {
+      console.error("[MESSAGING] Get conversations error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju konverzacija" });
+    }
+  });
+  app2.get("/api/messages/conversation/:userId", requireVerifiedEmail, async (req, res) => {
+    try {
+      const otherUserId = parseInt(req.params.userId);
+      if (isNaN(otherUserId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID korisnika" });
+      }
+      const conversation = await storage.getConversation(req.user.id, otherUserId);
+      if (!conversation) {
+        return res.json([]);
+      }
+      const messages2 = await storage.getConversationMessages(conversation.id, req.user.id);
+      await storage.markMessagesAsRead(conversation.id, req.user.id);
+      if (wsHelpers.broadcastToUser) {
+        wsHelpers.broadcastToUser(otherUserId, {
+          type: "message_read",
+          conversationId: conversation.id,
+          readBy: req.user.id
+        });
+      }
+      res.json(messages2);
+    } catch (error) {
+      console.error("[MESSAGING] Get messages error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju poruka" });
+    }
+  });
+  app2.post("/api/messages/send", requireVerifiedEmail, async (req, res) => {
+    try {
+      const { receiverId, content, imageUrl } = req.body;
+      if (!receiverId || typeof receiverId !== "number") {
+        return res.status(400).json({ error: "receiverId je obavezan" });
+      }
+      if (receiverId === req.user.id) {
+        return res.status(400).json({ error: "Ne mo\u017Eete slati poruke samom sebi" });
+      }
+      if (!content || typeof content !== "string" || content.trim().length === 0) {
+        return res.status(400).json({ error: "Poruka ne mo\u017Ee biti prazna" });
+      }
+      if (content.length > 5e3) {
+        return res.status(400).json({ error: "Poruka mo\u017Ee imati najvi\u0161e 5000 karaktera" });
+      }
+      const receiver = await storage.getUser(receiverId);
+      if (!receiver) {
+        return res.status(404).json({ error: "Korisnik ne postoji" });
+      }
+      if (receiver.banned) {
+        return res.status(403).json({ error: "Ne mo\u017Eete slati poruke banovanom korisniku" });
+      }
+      const message = await storage.sendMessage(
+        req.user.id,
+        receiverId,
+        content.trim(),
+        imageUrl
+      );
+      res.json(message);
+    } catch (error) {
+      console.error("[MESSAGING] Send message error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri slanju poruke" });
+    }
+  });
+  app2.put("/api/messages/mark-read", requireVerifiedEmail, async (req, res) => {
+    console.warn("[DEPRECATED] PUT /api/messages/mark-read called - browser cache issue! User needs hard refresh (Ctrl+F5)");
+    res.json({
+      success: true,
+      deprecated: true,
+      message: "Please perform a hard refresh of your browser (Ctrl+F5 or Ctrl+Shift+R)"
+    });
+  });
+  app2.get("/api/messages/unread-count", requireVerifiedEmail, async (req, res) => {
+    try {
+      const count = await storage.getUnreadMessageCount(req.user.id);
+      res.json({ count });
+    } catch (error) {
+      console.error("[MESSAGING] Get unread count error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju broja nepro\u010Ditanih poruka" });
+    }
+  });
+  app2.delete("/api/messages/:id", requireVerifiedEmail, async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.id);
+      if (isNaN(messageId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID poruke" });
+      }
+      const success = await storage.deleteMessage(messageId, req.user.id);
+      if (!success) {
+        return res.status(403).json({ error: "Ne mo\u017Eete obrisati ovu poruku" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[MESSAGING] Delete message error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri brisanju poruke" });
+    }
+  });
+  app2.get("/api/admin/messages/conversations", requireAdmin, async (req, res) => {
+    try {
+      const conversations2 = await storage.adminGetAllConversations();
+      res.json(conversations2);
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Get all conversations error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju konverzacija" });
+    }
+  });
+  app2.get("/api/admin/messages/conversation/:user1Id/:user2Id", requireAdmin, async (req, res) => {
+    try {
+      const user1Id = parseInt(req.params.user1Id);
+      const user2Id = parseInt(req.params.user2Id);
+      if (isNaN(user1Id) || isNaN(user2Id)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID korisnika" });
+      }
+      await storage.adminLogConversationView(req.user.id, user1Id, user2Id);
+      const messages2 = await storage.adminGetConversationMessages(user1Id, user2Id);
+      res.json(messages2);
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Get conversation messages error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju poruka" });
+    }
+  });
+  app2.delete("/api/admin/messages/:id", requireAdmin, async (req, res) => {
+    try {
+      const messageId = parseInt(req.params.id);
+      if (isNaN(messageId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID poruke" });
+      }
+      await storage.adminDeleteMessage(messageId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Delete message error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri brisanju poruke" });
+    }
+  });
+  app2.get("/api/admin/messages/audit-logs", requireAdmin, async (req, res) => {
+    try {
+      const logs = await storage.adminGetAuditLogs();
+      res.json(logs);
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Get audit logs error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju audit logova" });
+    }
+  });
+  app2.get("/api/admin/messages/export/:user1Id/:user2Id", requireAdmin, async (req, res) => {
+    try {
+      const user1Id = parseInt(req.params.user1Id);
+      const user2Id = parseInt(req.params.user2Id);
+      if (isNaN(user1Id) || isNaN(user2Id)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID korisnika" });
+      }
+      const txtContent = await storage.adminExportConversation(user1Id, user2Id);
+      const user1 = await storage.getUser(user1Id);
+      const user2 = await storage.getUser(user2Id);
+      const filename = `konverzacija_${user1?.username}_${user2?.username}_${Date.now()}.txt`;
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      res.send(txtContent);
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Export conversation error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri izvozu konverzacije" });
+    }
+  });
+  app2.get("/api/admin/messages/stats", requireAdmin, async (req, res) => {
+    try {
+      const stats = await storage.adminGetMessagingStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("[ADMIN MESSAGING] Get stats error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju statistike" });
+    }
+  });
+  function sanitizeNameForFilename(name) {
+    return name.replace(/\s+/g, "").replace(/[^a-zA-Z0-9]/g, "").substring(0, 30);
+  }
+  app2.post("/api/admin/contracts/generate", requireAdmin, async (req, res) => {
+    try {
+      const { contractType, contractData } = req.body;
+      if (!contractType || !contractData) {
+        return res.status(400).json({ error: "Tip ugovora i podaci su obavezni" });
+      }
+      let validatedData;
+      try {
+        switch (contractType) {
+          case "mix_master":
+            validatedData = mixMasterContractDataSchema.parse(contractData);
+            break;
+          case "copyright_transfer":
+            validatedData = copyrightTransferContractDataSchema.parse(contractData);
+            break;
+          case "instrumental_sale":
+            validatedData = instrumentalSaleContractDataSchema.parse(contractData);
+            break;
+          default:
+            return res.status(400).json({ error: "Neva\u017Ee\u0107i tip ugovora" });
+        }
+      } catch (validationError) {
+        console.error("[CONTRACTS] Validation error:", validationError);
+        return res.status(400).json({
+          error: "Validacija podataka nije uspela",
+          details: validationError.errors || validationError.message
+        });
+      }
+      const contractNumber = await storage.getNextContractNumber();
+      let pdfBuffer;
+      switch (contractType) {
+        case "mix_master":
+          pdfBuffer = await generateMixMasterPDF(validatedData);
+          break;
+        case "copyright_transfer":
+          pdfBuffer = await generateCopyrightTransferPDF(validatedData);
+          break;
+        case "instrumental_sale":
+          pdfBuffer = await generateInstrumentalSalePDF(validatedData);
+          break;
+        default:
+          return res.status(400).json({ error: "Neva\u017Ee\u0107i tip ugovora" });
+      }
+      const contractsDir = path2.join(process.cwd(), "attached_assets", "contracts");
+      fs.mkdirSync(contractsDir, { recursive: true });
+      let clientName = "";
+      if (contractType === "mix_master") {
+        clientName = validatedData.clientName || "";
+      } else {
+        clientName = validatedData.buyerName || "";
+      }
+      const sanitizedName = sanitizeNameForFilename(clientName);
+      const filename = sanitizedName ? `ugovor_${contractNumber.replace("/", "_")}_${sanitizedName}.pdf` : `ugovor_${contractNumber.replace("/", "_")}.pdf`;
+      const pdfPath = path2.join(contractsDir, filename);
+      fs.writeFileSync(pdfPath, pdfBuffer);
+      const contract = await storage.createContract({
+        contractNumber,
+        contractType,
+        contractData,
+        pdfPath: `attached_assets/contracts/${filename}`,
+        clientEmail: contractData.clientEmail || null,
+        createdBy: req.user.id
+      });
+      res.json({
+        success: true,
+        contract: {
+          id: contract.id,
+          contractNumber: contract.contractNumber,
+          contractType: contract.contractType
+        }
+      });
+    } catch (error) {
+      console.error("[CONTRACTS] Generate error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri generisanju ugovora" });
+    }
+  });
+  app2.get("/api/admin/contracts", requireAdmin, async (req, res) => {
+    try {
+      const contracts2 = await storage.getAllContracts();
+      res.json(contracts2);
+    } catch (error) {
+      console.error("[CONTRACTS] Get all error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri u\u010Ditavanju ugovora" });
+    }
+  });
+  app2.get("/api/admin/contracts/:id/download", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID ugovora" });
+      }
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije prona\u0111en" });
+      }
+      const pdfPath = path2.join(process.cwd(), contract.pdfPath);
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: "PDF fajl nije prona\u0111en" });
+      }
+      const downloadFilename = path2.basename(contract.pdfPath || `ugovor_${contract.contractNumber.replace("/", "_")}.pdf`);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${downloadFilename}"`);
+      const fileStream = fs.createReadStream(pdfPath);
+      fileStream.pipe(res);
+    } catch (error) {
+      console.error("[CONTRACTS] Download error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri preuzimanju ugovora" });
+    }
+  });
+  app2.post("/api/admin/contracts/:id/send-email", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      const { email } = req.body;
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID ugovora" });
+      }
+      if (!email || !email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107a email adresa" });
+      }
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije prona\u0111en" });
+      }
+      const pdfPath = path2.join(process.cwd(), contract.pdfPath);
+      if (!fs.existsSync(pdfPath)) {
+        return res.status(404).json({ error: "PDF fajl nije prona\u0111en" });
+      }
+      const pdfBuffer = fs.readFileSync(pdfPath);
+      const pdfBase64 = pdfBuffer.toString("base64");
+      const emailHtml = `
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f4f4f7;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f4f4f7;">
+    <tr>
+      <td style="padding: 40px 20px;">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 40px 30px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">
+                Studio LeFlow
+              </h1>
+              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">
+                Profesionalna muzi\u010Dka produkcija
+              </p>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px 30px;">
+              <h2 style="margin: 0 0 16px; color: #1a1a1a; font-size: 22px; font-weight: 600;">
+                Po\u0161tovani,
+              </h2>
+              
+              <p style="margin: 0 0 16px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                U prilogu Vam dostavljamo ugovor broj <strong>${contract.contractNumber}</strong>.
+              </p>
+
+              <p style="margin: 0 0 24px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                Molimo Vas da pa\u017Eljivo pregledate dokument. Ukoliko imate bilo kakvih pitanja ili nedoumica, 
+                slobodno nas kontaktirajte.
+              </p>
+
+              <!-- Contract Info Box -->
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f8f9fa; border-radius: 6px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Broj ugovora:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${contract.contractNumber}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Tip:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${contract.contractType === "mix_master" ? "Mix & Master" : contract.contractType === "copyright_transfer" ? "Prenos autorskih prava" : "Prodaja instrumentala"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 0; color: #6b7280; font-size: 14px;">
+                          Datum:
+                        </td>
+                        <td style="padding: 8px 0; color: #1a1a1a; font-size: 14px; font-weight: 600; text-align: right;">
+                          ${new Date(contract.createdAt).toLocaleDateString("sr-RS")}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0 0 8px; color: #4a4a4a; font-size: 16px; line-height: 1.6;">
+                Srda\u010Dan pozdrav,
+              </p>
+              <p style="margin: 0 0 24px; color: #667eea; font-size: 16px; font-weight: 600; line-height: 1.6;">
+                Studio LeFlow tim
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8f9fa; padding: 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0 0 8px; color: #6b7280; font-size: 14px;">
+                Studio LeFlow | Beograd, Srbija
+              </p>
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                Ova poruka je automatski generisana. Molimo ne odgovarajte direktno na ovaj email.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `;
+      const emailFilename = path2.basename(contract.pdfPath || `ugovor_${contract.contractNumber.replace("/", "_")}.pdf`);
+      await sendEmail({
+        to: email,
+        subject: `Studio LeFlow - Ugovor ${contract.contractNumber}`,
+        html: emailHtml,
+        attachments: [{
+          filename: emailFilename,
+          content: pdfBase64,
+          encoding: "base64",
+          contentType: "application/pdf"
+        }]
+      });
+      res.json({ success: true, message: "Email uspe\u0161no poslat" });
+    } catch (error) {
+      console.error("[CONTRACTS] Send email error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri slanju email-a" });
+    }
+  });
+  app2.delete("/api/admin/contracts/:id", requireAdmin, async (req, res) => {
+    try {
+      const contractId = parseInt(req.params.id);
+      if (isNaN(contractId)) {
+        return res.status(400).json({ error: "Neva\u017Ee\u0107i ID ugovora" });
+      }
+      const contract = await storage.getContractById(contractId);
+      if (!contract) {
+        return res.status(404).json({ error: "Ugovor nije prona\u0111en" });
+      }
+      if (contract.pdfPath) {
+        const pdfPath = path2.join(process.cwd(), contract.pdfPath);
+        if (fs.existsSync(pdfPath)) {
+          fs.unlinkSync(pdfPath);
+        }
+      }
+      await storage.deleteContract(contractId);
+      res.json({ success: true, message: "Ugovor uspe\u0161no obrisan" });
+    } catch (error) {
+      console.error("[CONTRACTS] Delete error:", error);
+      res.status(500).json({ error: "Gre\u0161ka pri brisanju ugovora" });
+    }
+  });
   const httpServer = createServer(app2);
   return httpServer;
 }
@@ -1800,19 +4093,19 @@ Sitemap: ${siteUrl}/sitemap.xml
 // server/vite.ts
 import express from "express";
 import fs2 from "fs";
-import path3 from "path";
+import path4 from "path";
 import { createServer as createViteServer, createLogger as createLogger2 } from "vite";
 
 // vite.config.ts
 import { defineConfig, createLogger } from "vite";
 import react from "@vitejs/plugin-react";
-import path2 from "path";
+import path3 from "path";
 import { fileURLToPath } from "url";
 import runtimeErrorModal from "@replit/vite-plugin-runtime-error-modal";
 import tailwindcss from "tailwindcss";
 import autoprefixer from "autoprefixer";
 var __filename = fileURLToPath(import.meta.url);
-var __dirname = path2.dirname(__filename);
+var __dirname = path3.dirname(__filename);
 var logger = createLogger();
 var originalWarning = logger.warn;
 logger.warn = (msg, options) => {
@@ -1835,22 +4128,48 @@ var vite_config_default = defineConfig({
   },
   resolve: {
     alias: {
-      "@": path2.resolve(__dirname, "client", "src"),
-      "@shared": path2.resolve(__dirname, "shared"),
-      "@assets": path2.resolve(__dirname, "attached_assets")
+      "@": path3.resolve(__dirname, "client", "src"),
+      "@shared": path3.resolve(__dirname, "shared"),
+      "@assets": path3.resolve(__dirname, "attached_assets")
     }
   },
-  root: path2.resolve(__dirname, "client"),
+  root: path3.resolve(__dirname, "client"),
   build: {
-    outDir: path2.resolve(__dirname, "dist", "public"),
+    outDir: path3.resolve(__dirname, "dist", "public"),
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          "vendor-react": ["react", "react-dom", "wouter"],
-          "vendor-ui": ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-toast"],
-          "vendor-animation": ["framer-motion"],
-          "vendor-query": ["@tanstack/react-query"]
+        manualChunks(id) {
+          if (id.includes("node_modules")) {
+            if (id.includes("@radix-ui")) {
+              if (id.includes("dialog") || id.includes("dropdown") || id.includes("toast") || id.includes("popover")) {
+                return "vendor-ui-overlay";
+              }
+              if (id.includes("select") || id.includes("checkbox") || id.includes("radio") || id.includes("switch")) {
+                return "vendor-ui-forms";
+              }
+              return "vendor-ui-base";
+            }
+            if (id.includes("@tanstack/react-query")) {
+              return "vendor-query";
+            }
+            if (id.includes("lucide-react")) {
+              return "vendor-icons";
+            }
+            if (id.includes("@tiptap")) {
+              return "vendor-editor";
+            }
+            if (id.includes("recharts") || id.includes("d3-")) {
+              return "vendor-charts";
+            }
+            if (id.includes("framer-motion")) {
+              return "vendor-animation";
+            }
+            if (id.includes("react-dom") || id.includes("react/") || id.includes("react\\") || id.includes("scheduler") || id.includes("wouter")) {
+              return "vendor-react";
+            }
+            return "vendor-other";
+          }
         }
       }
     },
@@ -1859,14 +4178,27 @@ var vite_config_default = defineConfig({
     terserOptions: {
       compress: {
         drop_console: true,
-        drop_debugger: true
+        drop_debugger: true,
+        pure_funcs: ["console.log", "console.info"]
+      },
+      mangle: {
+        safari10: true
       }
-    }
+    },
+    chunkSizeWarningLimit: 1e3
   },
   server: {
     host: "0.0.0.0",
     port: 5e3,
-    allowedHosts: true
+    strictPort: true,
+    hmr: {
+      clientPort: 443
+    },
+    allowedHosts: [
+      ".replit.app",
+      ".repl.co",
+      "localhost"
+    ]
   }
 });
 
@@ -1885,7 +4217,10 @@ function log(message, source = "express") {
 async function setupVite(app2, server) {
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: {
+      server,
+      port: 5e3
+    },
     allowedHosts: true
   };
   const vite = await createViteServer({
@@ -1905,7 +4240,7 @@ async function setupVite(app2, server) {
   app2.use("*", async (req, res, next) => {
     const url = req.originalUrl;
     try {
-      const clientTemplate = path3.resolve(
+      const clientTemplate = path4.resolve(
         import.meta.dirname,
         "..",
         "client",
@@ -1925,7 +4260,7 @@ async function setupVite(app2, server) {
   });
 }
 function serveStatic(app2) {
-  const distPath = path3.resolve(import.meta.dirname, "public");
+  const distPath = path4.resolve(import.meta.dirname, "public");
   log(`Looking for static files in: ${distPath}`, "express");
   if (!fs2.existsSync(distPath)) {
     log(`ERROR: Build directory not found at ${distPath}`, "express");
@@ -1933,7 +4268,7 @@ function serveStatic(app2) {
       `Could not find the build directory: ${distPath}, make sure to build the client first`
     );
   }
-  const indexPath = path3.resolve(distPath, "index.html");
+  const indexPath = path4.resolve(distPath, "index.html");
   if (!fs2.existsSync(indexPath)) {
     log(`ERROR: index.html not found at ${indexPath}`, "express");
     throw new Error(
@@ -1949,6 +4284,7 @@ function serveStatic(app2) {
 
 // server/seed.ts
 init_schema();
+import { sql as sql3 } from "drizzle-orm";
 var defaultCmsContent = [
   // Hero section
   { page: "home", section: "hero", contentKey: "title", contentValue: "Studio LeFlow" },
@@ -1970,9 +4306,44 @@ var defaultCmsContent = [
   { page: "home", section: "cta", contentKey: "title", contentValue: "Spremni za Va\u0161u Slede\u0107u Produkciju?" },
   { page: "home", section: "cta", contentKey: "description", contentValue: "Zaka\u017Eite besplatnu konsultaciju i razgovarajmo o va\u0161oj muzi\u010Dkoj viziji" }
 ];
+async function ensureMessagingTriggers() {
+  try {
+    console.log("\u{1F527} Ensuring messaging triggers...");
+    await db.execute(sql3`
+      CREATE OR REPLACE FUNCTION enforce_canonical_conversation_users()
+      RETURNS TRIGGER AS $$
+      DECLARE
+        temp INT;
+      BEGIN
+        -- If user1_id > user2_id, swap them to enforce canonical ordering
+        IF NEW.user1_id > NEW.user2_id THEN
+          temp := NEW.user1_id;
+          NEW.user1_id := NEW.user2_id;
+          NEW.user2_id := temp;
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+    await db.execute(sql3`
+      DROP TRIGGER IF EXISTS trigger_canonical_conversation_users ON conversations;
+    `);
+    await db.execute(sql3`
+      CREATE TRIGGER trigger_canonical_conversation_users
+      BEFORE INSERT OR UPDATE ON conversations
+      FOR EACH ROW
+      EXECUTE FUNCTION enforce_canonical_conversation_users();
+    `);
+    console.log("\u2705 Messaging triggers ensured");
+  } catch (error) {
+    console.error("\u274C Error ensuring messaging triggers:", error);
+    throw error;
+  }
+}
 async function seedCmsContent() {
   try {
     console.log("\u{1F331} Checking CMS content...");
+    await ensureMessagingTriggers();
     const existingContent = await db.select().from(cmsContent).limit(1);
     if (existingContent.length > 0) {
       console.log("\u2705 CMS content already exists, skipping seed");
@@ -1988,6 +4359,7 @@ async function seedCmsContent() {
 }
 
 // server/index.ts
+import { WebSocketServer, WebSocket } from "ws";
 var app = express2();
 app.use(compression({
   level: 6,
@@ -2000,9 +4372,12 @@ app.use(compression({
     return compression.filter(req, res);
   }
 }));
-app.use("/attached_assets", express2.static(path4.join(process.cwd(), "attached_assets"), {
+app.use("/attached_assets", express2.static(path5.join(process.cwd(), "attached_assets"), {
   maxAge: "1y",
   immutable: true
+}));
+app.use("/public", express2.static(path5.join(process.cwd(), "public"), {
+  maxAge: "1d"
 }));
 app.set("trust proxy", 1);
 app.use(express2.json({
@@ -2020,7 +4395,7 @@ app.use((req, res, next) => {
 });
 app.use((req, res, next) => {
   const start = Date.now();
-  const path5 = req.path;
+  const path6 = req.path;
   let capturedJsonResponse = void 0;
   const originalResJson = res.json;
   res.json = function(bodyJson, ...args) {
@@ -2029,8 +4404,8 @@ app.use((req, res, next) => {
   };
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path5.startsWith("/api")) {
-      let logLine = `${req.method} ${path5} ${res.statusCode} in ${duration}ms`;
+    if (path6.startsWith("/api")) {
+      let logLine = `${req.method} ${path6} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -2044,6 +4419,21 @@ app.use((req, res, next) => {
 });
 (async () => {
   try {
+    let broadcastToUser2 = function(userId, message) {
+      const userSockets = onlineUsers.get(userId);
+      if (userSockets) {
+        const messageStr = JSON.stringify(message);
+        userSockets.forEach((socket) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(messageStr);
+          }
+        });
+      }
+    }, getConversationKey2 = function(user1Id, user2Id) {
+      const [id1, id2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
+      return `${id1}-${id2}`;
+    };
+    var broadcastToUser = broadcastToUser2, getConversationKey = getConversationKey2;
     const env = app.get("env");
     log(`Starting server in ${env} mode`);
     log(`PORT: ${process.env.PORT || "5000"}`);
@@ -2054,11 +4444,6 @@ app.use((req, res, next) => {
     if (!process.env.SESSION_SECRET) {
       missingEnvVars.push("SESSION_SECRET");
     }
-    if (env === "production") {
-      if (!process.env.UPLOADTHING_TOKEN && !process.env.UPLOADTHING_SECRET) {
-        missingEnvVars.push("UPLOADTHING_TOKEN or UPLOADTHING_SECRET");
-      }
-    }
     if (missingEnvVars.length > 0) {
       const errorMsg = `FATAL: Missing required environment variables: ${missingEnvVars.join(", ")}`;
       log(errorMsg, "express");
@@ -2067,13 +4452,48 @@ app.use((req, res, next) => {
       console.error("=".repeat(80));
       console.error("\nThe following environment variables are required but not set:");
       missingEnvVars.forEach((v) => console.error(`  - ${v}`));
+      console.error("\nRequired for all environments:");
+      console.error("  - DATABASE_URL: PostgreSQL connection string");
+      console.error("  - SESSION_SECRET: Secret key for session encryption");
+      console.error("\nOptional (for specific features):");
+      console.error("  - UPLOADTHING_TOKEN: For file uploads (avatars, MP3 files)");
+      console.error("  - RESEND_API_KEY: For email functionality");
+      console.error("  - RESEND_FROM_EMAIL: Sender email address");
       console.error("\nPlease add these in Replit Deployment \u2192 Secrets");
       console.error("=".repeat(80) + "\n");
       process.exit(1);
     }
     log("All required environment variables present", "express");
+    const optionalWarnings = [];
+    const hasUploadThingToken = !!process.env.UPLOADTHING_TOKEN;
+    const hasUploadThingSecret = !!process.env.UPLOADTHING_SECRET;
+    if (!hasUploadThingToken && !hasUploadThingSecret) {
+      optionalWarnings.push("UPLOADTHING_TOKEN and UPLOADTHING_SECRET not set - file upload features (avatars, MP3 files) will be completely disabled");
+    } else if (!hasUploadThingToken) {
+      optionalWarnings.push("UPLOADTHING_TOKEN not set - file upload features will NOT work (UPLOADTHING_SECRET alone is insufficient)");
+    } else if (!hasUploadThingSecret) {
+      optionalWarnings.push("UPLOADTHING_SECRET not set - file upload features will NOT work (UPLOADTHING_TOKEN alone is insufficient)");
+    }
+    if (!process.env.RESEND_API_KEY) {
+      optionalWarnings.push("RESEND_API_KEY not set - email features (verification, password reset, contact form) will be disabled");
+    }
+    if (!process.env.RESEND_FROM_EMAIL) {
+      optionalWarnings.push("RESEND_FROM_EMAIL not set - emails cannot be sent even if RESEND_API_KEY is configured");
+    }
+    if (optionalWarnings.length > 0 && env === "production") {
+      console.warn("\n" + "-".repeat(80));
+      console.warn("WARNING: Optional environment variables not configured:");
+      console.warn("-".repeat(80));
+      optionalWarnings.forEach((warning) => console.warn("  - " + warning));
+      console.warn("\nThe application will start, but some features will be unavailable.");
+      console.warn("Add these secrets in Replit Deployment \u2192 Secrets to enable all features.");
+      console.warn("-".repeat(80) + "\n");
+    }
     await seedCmsContent();
     const server = await registerRoutes(app);
+    const onlineUsers = /* @__PURE__ */ new Map();
+    const typingUsers = /* @__PURE__ */ new Map();
+    setBroadcastFunction(broadcastToUser2);
     app.use((err, _req, res, _next) => {
       const status = err.status || err.statusCode || 500;
       const message = err.message || "Internal Server Error";
@@ -2104,6 +4524,121 @@ app.use((req, res, next) => {
       console.error("Full error:", error);
       process.exit(1);
     });
+    const wss = new WebSocketServer({ server, path: "/api/ws" });
+    wss.on("connection", async (ws, req) => {
+      try {
+        const cookieHeader = req.headers.cookie;
+        if (!cookieHeader) {
+          ws.close(1008, "No session cookie");
+          return;
+        }
+        const sessionCookie = cookieHeader.split(";").find((c) => c.trim().startsWith("connect.sid="));
+        if (!sessionCookie) {
+          ws.close(1008, "Invalid session");
+          return;
+        }
+        let userId = null;
+        ws.on("message", async (data) => {
+          try {
+            const message = JSON.parse(data.toString());
+            if (message.type === "auth" && !userId) {
+              userId = message.userId;
+              if (!userId) {
+                ws.close(1008, "Authentication failed");
+                return;
+              }
+              if (!onlineUsers.has(userId)) {
+                onlineUsers.set(userId, /* @__PURE__ */ new Set());
+              }
+              onlineUsers.get(userId).add(ws);
+              await storage.updateUserLastSeen(userId);
+              broadcastToUser2(userId, {
+                type: "online_status",
+                userId,
+                online: true
+              });
+              log(`[WebSocket] User ${userId} connected`);
+              return;
+            }
+            if (!userId) {
+              ws.close(1008, "Not authenticated");
+              return;
+            }
+            if (message.type === "typing_start") {
+              const { receiverId } = message;
+              const conversationKey = getConversationKey2(userId, receiverId);
+              const currentUserId = userId;
+              if (!typingUsers.has(conversationKey)) {
+                typingUsers.set(conversationKey, /* @__PURE__ */ new Set());
+              }
+              typingUsers.get(conversationKey).add(userId);
+              broadcastToUser2(receiverId, {
+                type: "typing_start",
+                userId
+              });
+              setTimeout(() => {
+                typingUsers.get(conversationKey)?.delete(currentUserId);
+                broadcastToUser2(receiverId, {
+                  type: "typing_stop",
+                  userId: currentUserId
+                });
+              }, 5e3);
+            }
+            if (message.type === "typing_stop") {
+              const { receiverId } = message;
+              const conversationKey = getConversationKey2(userId, receiverId);
+              typingUsers.get(conversationKey)?.delete(userId);
+              broadcastToUser2(receiverId, {
+                type: "typing_stop",
+                userId
+              });
+            }
+            if (message.type === "new_message") {
+              const { receiverId, messageData } = message;
+              broadcastToUser2(receiverId, {
+                type: "new_message",
+                message: messageData
+              });
+            }
+            if (message.type === "message_read") {
+              const { senderId, conversationId } = message;
+              broadcastToUser2(senderId, {
+                type: "message_read",
+                conversationId,
+                readBy: userId
+              });
+            }
+          } catch (error) {
+            log(`[WebSocket] Message parse error: ${error.message}`);
+          }
+        });
+        ws.on("close", async () => {
+          if (userId) {
+            const userSockets = onlineUsers.get(userId);
+            if (userSockets) {
+              userSockets.delete(ws);
+              if (userSockets.size === 0) {
+                onlineUsers.delete(userId);
+                await storage.updateUserLastSeen(userId);
+                broadcastToUser2(userId, {
+                  type: "online_status",
+                  userId,
+                  online: false
+                });
+              }
+            }
+            log(`[WebSocket] User ${userId} disconnected`);
+          }
+        });
+        ws.on("error", (error) => {
+          log(`[WebSocket] Socket error: ${error.message}`);
+        });
+      } catch (error) {
+        log(`[WebSocket] Connection error: ${error.message}`);
+        ws.close(1011, "Internal server error");
+      }
+    });
+    log("[WebSocket] WebSocket server initialized on /api/ws");
   } catch (error) {
     log(`Failed to start server: ${error.message}`, "express");
     console.error("Full error:", error);
