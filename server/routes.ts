@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { wsHelpers } from "./websocket-helpers";
+import { wsHelpers, notifyUser, getOnlineUsersSnapshot } from "./websocket-helpers";
 import { insertContactSubmissionSchema, insertCmsContentSchema, insertCmsMediaSchema, insertVideoSpotSchema, insertUserSongSchema, insertNewsletterSubscriberSchema, mixMasterContractDataSchema, copyrightTransferContractDataSchema, instrumentalSaleContractDataSchema, type CmsContent, type CmsMedia, type VideoSpot, type UserSong } from "@shared/schema";
 import { sendEmail, getLastVerificationCode } from "./resend-client";
 import { setupAuth, hashPassword, comparePasswords } from "./auth";
@@ -49,6 +49,34 @@ function escapeHtml(text: string): string {
     "'": '&#039;'
   };
   return text.replace(/[&<>"']/g, (m) => map[m] || m);
+}
+
+// Simple in-memory cache for analytics (30-60s TTL)
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+const analyticsCache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL = 45000; // 45 seconds
+
+function getCachedData<T>(key: string): T | null {
+  const entry = analyticsCache.get(key);
+  if (!entry) return null;
+  
+  if (Date.now() > entry.expiresAt) {
+    analyticsCache.delete(key);
+    return null;
+  }
+  
+  return entry.data;
+}
+
+function setCachedData<T>(key: string, data: T): void {
+  analyticsCache.set(key, {
+    data,
+    expiresAt: Date.now() + CACHE_TTL,
+  });
 }
 
 // Sanitize user object by removing sensitive fields
@@ -1039,6 +1067,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentMonth,
       });
       
+      // Notify user about successful upload
+      notifyUser(
+        req.user!.id,
+        "Projekat uploadovan! 🎉",
+        `Vaš projekat "${project.title}" je uspešno poslat. Sada možete glasati za druge projekte.`
+      );
+      
+      // Notify all admins about new project submission
+      const admins = await storage.getAdminUsers();
+      admins.forEach(admin => {
+        notifyUser(
+          admin.id,
+          "Novi projekat uploadovan",
+          `${req.user!.username} je uploadovao projekat "${project.title}"`
+        );
+      });
+      
       res.status(201).json(project);
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -1568,6 +1613,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         youtubeUrl: validated.youtubeUrl,
       });
       
+      // Notify all admins about new song submission
+      const admins = await storage.getAdminUsers();
+      admins.forEach(admin => {
+        notifyUser(
+          admin.id,
+          "Nova pesma za odobrenje",
+          `${req.user!.username} je poslao pesmu "${newSong.songTitle}" - ${newSong.artistName}`
+        );
+      });
+      
       res.json(newSong);
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -1644,7 +1699,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Nevažeći ID" });
       }
       
+      // Get song details to notify the user
+      const song = await storage.getUserSongById(songId);
+      if (!song) {
+        return res.status(404).json({ error: "Pesma nije pronađena" });
+      }
+      
       await storage.approveUserSong(songId);
+      
+      // Notify the user that their song was approved
+      notifyUser(
+        song.userId, 
+        "Pesma odobrena! 🎵",
+        `Vaša pesma "${song.songTitle}" je odobrena i sada je vidljiva svima.`
+      );
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error approving user song:", error);
@@ -2387,6 +2456,117 @@ Sitemap: ${siteUrl}/sitemap.xml
     } catch (error: any) {
       console.error("[CONTRACTS] Delete error:", error);
       res.status(500).json({ error: "Greška pri brisanju ugovora" });
+    }
+  });
+
+  // ============================================================================
+  // ANALYTICS ENDPOINTS (Admin only, with caching)
+  // ============================================================================
+
+  // GET /api/admin/analytics/summary - Cached analytics summary
+  app.get("/api/admin/analytics/summary", requireAdmin, async (_req, res) => {
+    try {
+      const cacheKey = 'analytics:summary';
+      const cached = getCachedData<any>(cacheKey);
+      
+      if (cached) {
+        return res.json(cached);
+      }
+
+      // Gather all metrics in parallel
+      const [
+        newUsersToday,
+        newUsersWeek,
+        newUsersMonth,
+        topProjects,
+        approvedSongsToday,
+        approvedSongsWeek,
+        approvedSongsMonth,
+        contractStats,
+        unreadConversations,
+      ] = await Promise.all([
+        storage.getNewUsersCount('today'),
+        storage.getNewUsersCount('week'),
+        storage.getNewUsersCount('month'),
+        storage.getTopProjects(10),
+        storage.getApprovedSongsCount('today'),
+        storage.getApprovedSongsCount('week'),
+        storage.getApprovedSongsCount('month'),
+        storage.getContractStats(),
+        storage.getUnreadConversationsCount(),
+      ]);
+
+      const summary = {
+        newUsers: {
+          today: newUsersToday,
+          week: newUsersWeek,
+          month: newUsersMonth,
+        },
+        approvedSongs: {
+          today: approvedSongsToday,
+          week: approvedSongsWeek,
+          month: approvedSongsMonth,
+        },
+        topProjects: topProjects.slice(0, 5),
+        contracts: contractStats,
+        unreadConversations,
+        activeUsers: getOnlineUsersSnapshot().length,
+      };
+
+      setCachedData(cacheKey, summary);
+      res.json(summary);
+    } catch (error) {
+      console.error("Error fetching analytics summary:", error);
+      res.status(500).json({ error: "Greška pri učitavanju analitike" });
+    }
+  });
+
+  // GET /api/admin/analytics/active-users - Current active users
+  app.get("/api/admin/analytics/active-users", requireAdmin, async (_req, res) => {
+    try {
+      const onlineUserIds = getOnlineUsersSnapshot();
+      
+      // Fetch user details for online users
+      const onlineUsers = await Promise.all(
+        onlineUserIds.map(async (userId) => {
+          const user = await storage.getUser(userId);
+          if (!user) return null;
+          return {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            role: user.role,
+          };
+        })
+      );
+
+      const validUsers = onlineUsers.filter(u => u !== null);
+      res.json({ count: validUsers.length, users: validUsers });
+    } catch (error) {
+      console.error("Error fetching active users:", error);
+      res.status(500).json({ error: "Greška pri učitavanju aktivnih korisnika" });
+    }
+  });
+
+  // GET /api/admin/analytics/top-projects - Top projects with optional limit
+  app.get("/api/admin/analytics/top-projects", requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const cacheKey = `analytics:top-projects:${limit}`;
+      
+      const cached = getCachedData<any>(cacheKey);
+      if (cached) {
+        return res.json(cached);
+      }
+
+      const topProjects = await storage.getTopProjects(limit);
+      setCachedData(cacheKey, topProjects);
+      
+      res.json(topProjects);
+    } catch (error) {
+      console.error("Error fetching top projects:", error);
+      res.status(500).json({ error: "Greška pri učitavanju top projekata" });
     }
   });
 

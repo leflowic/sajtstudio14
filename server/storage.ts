@@ -68,6 +68,7 @@ export interface IStorage {
   unbanUser(id: number): Promise<void>;
   acceptTerms(id: number): Promise<void>;
   getAllUsers(): Promise<User[]>;
+  getAdminUsers(): Promise<User[]>;
   setVerificationCode(userId: number, code: string): Promise<void>;
   verifyEmail(userId: number, code: string): Promise<boolean>;
   setPasswordResetToken(userId: number, token: string): Promise<void>;
@@ -179,6 +180,13 @@ export interface IStorage {
   getNextContractNumber(): Promise<string>;
   deleteContract(id: number): Promise<void>;
 
+  // Analytics
+  getNewUsersCount(period: 'today' | 'week' | 'month'): Promise<number>;
+  getTopProjects(limit: number): Promise<Array<Project & { username: string; votesCount: number }>>;
+  getApprovedSongsCount(period: 'today' | 'week' | 'month'): Promise<number>;
+  getContractStats(): Promise<{ total: number; byType: Record<string, number> }>;
+  getUnreadConversationsCount(): Promise<number>;
+
   // Session store
   sessionStore: Store;
 }
@@ -270,6 +278,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getAdminUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, 'admin'));
   }
 
   async setVerificationCode(userId: number, code: string): Promise<void> {
@@ -1519,6 +1531,114 @@ export class DatabaseStorage implements IStorage {
 
   async deleteContract(id: number): Promise<void> {
     await db.delete(contracts).where(eq(contracts.id, id));
+  }
+
+  // Analytics
+  async getNewUsersCount(period: 'today' | 'week' | 'month'): Promise<number> {
+    const now = new Date();
+    let startDate: Date;
+
+    if (period === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === 'week') {
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      startDate = new Date(now.getTime() - diff * 24 * 60 * 60 * 1000);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(users)
+      .where(sql`${users.createdAt} >= ${startDate}`);
+
+    return result[0]?.count || 0;
+  }
+
+  async getTopProjects(limit: number): Promise<Array<Project & { username: string; votesCount: number }>> {
+    const result = await db
+      .select({
+        id: projects.id,
+        title: projects.title,
+        description: projects.description,
+        genre: projects.genre,
+        mp3Url: projects.mp3Url,
+        userId: projects.userId,
+        votesCount: projects.votesCount,
+        currentMonth: projects.currentMonth,
+        uploadDate: projects.uploadDate,
+        approved: projects.approved,
+        username: users.username,
+      })
+      .from(projects)
+      .leftJoin(users, eq(projects.userId, users.id))
+      .orderBy(desc(projects.votesCount))
+      .limit(limit);
+
+    return result.map(r => ({
+      ...r,
+      username: r.username || 'Unknown',
+    }));
+  }
+
+  async getApprovedSongsCount(period: 'today' | 'week' | 'month'): Promise<number> {
+    const now = new Date();
+    let startDate: Date;
+
+    if (period === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (period === 'week') {
+      const dayOfWeek = now.getDay();
+      const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+      startDate = new Date(now.getTime() - diff * 24 * 60 * 60 * 1000);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    }
+
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(userSongs)
+      .where(and(
+        eq(userSongs.approved, true),
+        sql`${userSongs.submittedAt} >= ${startDate}`
+      ));
+
+    return result[0]?.count || 0;
+  }
+
+  async getContractStats(): Promise<{ total: number; byType: Record<string, number> }> {
+    const allContracts = await db.select().from(contracts);
+    const total = allContracts.length;
+    
+    const byType: Record<string, number> = {};
+    allContracts.forEach(contract => {
+      const type = contract.contractType || 'unknown';
+      byType[type] = (byType[type] || 0) + 1;
+    });
+
+    return { total, byType };
+  }
+
+  async getUnreadConversationsCount(): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(DISTINCT ${messages.conversationId})::int` })
+      .from(messages)
+      .leftJoin(
+        messageReads,
+        and(
+          eq(messages.id, messageReads.messageId),
+          sql`${messageReads.userId} = ${messages.receiverId}`
+        )
+      )
+      .where(and(
+        eq(messages.deleted, false),
+        sql`${messageReads.id} IS NULL`
+      ));
+
+    return result[0]?.count || 0;
   }
 }
 

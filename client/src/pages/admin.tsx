@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye, Search, Download } from "lucide-react";
+import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye, Search, Download, UserPlus, FileText } from "lucide-react";
 import { format } from "date-fns";
 import type { User, CmsContent, InsertCmsContent } from "@shared/schema";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -39,6 +39,31 @@ interface AdminStats {
   totalProjects: number;
   totalVotes: number;
   totalComments: number;
+}
+
+interface AnalyticsSummary {
+  newUsers: {
+    today: number;
+    week: number;
+    month: number;
+  };
+  approvedSongs: {
+    today: number;
+    week: number;
+    month: number;
+  };
+  topProjects: Array<{
+    id: number;
+    title: string;
+    username: string;
+    votesCount: number;
+  }>;
+  contracts: {
+    total: number;
+    byType: Record<string, number>;
+  };
+  unreadConversations: number;
+  activeUsers: number;
 }
 
 interface ProjectWithUser {
@@ -1115,8 +1140,14 @@ function GiveawaySettingsSection() {
 function DashboardTab() {
   const { toast } = useToast();
 
-  // Fetch stats
-  const { data: stats, isLoading: statsLoading } = useQuery<AdminStats>({
+  // Fetch analytics summary
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
+    queryKey: ["/api/admin/analytics/summary"],
+    refetchInterval: 60000, // Refresh every minute
+  });
+
+  // Fetch old stats for backward compatibility
+  const { data: stats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
   });
 
@@ -1146,11 +1177,11 @@ function DashboardTab() {
     },
   });
 
-  if (statsLoading || settingsLoading) {
+  if (analyticsLoading || settingsLoading) {
     return (
       <div className="space-y-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {[1, 2, 3, 4].map((i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <Skeleton key={i} className="h-32" data-testid={`skeleton-stat-${i}`} />
           ))}
         </div>
@@ -1181,55 +1212,163 @@ function DashboardTab() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card data-testid="card-stat-users">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ukupno Korisnika</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-users">
-              {stats?.totalUsers || 0}
-            </div>
-          </CardContent>
-        </Card>
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Aktivnost</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card data-testid="card-stat-active-users">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Aktivni Korisnici</CardTitle>
+              <Users className="h-4 w-4 text-green-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-active-users">
+                {analytics?.activeUsers || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">Trenutno online</p>
+            </CardContent>
+          </Card>
 
-        <Card data-testid="card-stat-projects">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ukupno Projekata</CardTitle>
-            <Music className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-projects">
-              {stats?.totalProjects || 0}
-            </div>
-          </CardContent>
-        </Card>
+          <Card data-testid="card-stat-new-users">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Nove Registracije</CardTitle>
+              <UserPlus className="h-4 w-4 text-blue-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-new-users-today">
+                {analytics?.newUsers.today || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Danas • {analytics?.newUsers.week || 0} ove nedelje • {analytics?.newUsers.month || 0} ovog meseca
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card data-testid="card-stat-votes">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ukupno Glasova</CardTitle>
-            <Heart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-votes">
-              {stats?.totalVotes || 0}
-            </div>
-          </CardContent>
-        </Card>
+          <Card data-testid="card-stat-approved-songs">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Odobrene Pesme</CardTitle>
+              <Music className="h-4 w-4 text-purple-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-approved-songs-today">
+                {analytics?.approvedSongs.today || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Danas • {analytics?.approvedSongs.week || 0} ove nedelje • {analytics?.approvedSongs.month || 0} ovog meseca
+              </p>
+            </CardContent>
+          </Card>
 
-        <Card data-testid="card-stat-comments">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Ukupno Komentara</CardTitle>
-            <MessageCircle className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-comments">
-              {stats?.totalComments || 0}
-            </div>
-          </CardContent>
-        </Card>
+          <Card data-testid="card-stat-unread-messages">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Nepročitane Poruke</CardTitle>
+              <MessageCircle className="h-4 w-4 text-orange-600" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-unread-conversations">
+                {analytics?.unreadConversations || 0}
+              </div>
+              <p className="text-xs text-muted-foreground">Konverzacija sa nepročitanim porukama</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
+
+      <div>
+        <h3 className="text-lg font-semibold mb-4">Ukupno</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card data-testid="card-stat-total-users">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ukupno Korisnika</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-total-users">
+                {stats?.totalUsers || 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-stat-total-projects">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ukupno Projekata</CardTitle>
+              <Music className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-total-projects">
+                {stats?.totalProjects || 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-stat-total-contracts">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ukupno Ugovora</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-total-contracts">
+                {analytics?.contracts.total || 0}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card data-testid="card-stat-total-votes">
+            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Ukupno Glasova</CardTitle>
+              <Heart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold" data-testid="text-total-votes">
+                {stats?.totalVotes || 0}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Card data-testid="card-top-projects">
+        <CardHeader>
+          <CardTitle>Top 5 Projekata</CardTitle>
+          <CardDescription>Projekti sa najviše glasova</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!analytics?.topProjects || analytics.topProjects.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="text-no-projects">
+              Nema projekata za prikaz
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {analytics.topProjects.map((project, index) => (
+                <div
+                  key={project.id}
+                  className="flex items-center justify-between p-3 rounded-md bg-card hover-elevate"
+                  data-testid={`project-${project.id}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold">
+                      #{index + 1}
+                    </div>
+                    <div>
+                      <p className="font-medium" data-testid={`project-title-${project.id}`}>
+                        {project.title}
+                      </p>
+                      <p className="text-sm text-muted-foreground" data-testid={`project-username-${project.id}`}>
+                        {project.username}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Heart className="h-4 w-4" />
+                    <span className="font-semibold" data-testid={`project-votes-${project.id}`}>
+                      {project.votesCount}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

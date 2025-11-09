@@ -6,7 +6,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { seedCmsContent } from "./seed";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { setBroadcastFunction } from "./websocket-helpers";
+import { setBroadcastFunction, setNotificationFunction, setOnlineUsersAccessor } from "./websocket-helpers";
 
 const app = express();
 
@@ -195,14 +195,26 @@ app.use((req, res, next) => {
       }
     }
     
+    // Helper function to send notification to a specific user
+    function sendNotification(userId: number, title: string, description?: string, variant: 'default' | 'destructive' = 'default') {
+      broadcastToUser(userId, {
+        type: 'notification',
+        title,
+        description,
+        variant,
+      });
+    }
+    
     // Helper function to get conversation key (canonical ordering)
     function getConversationKey(user1Id: number, user2Id: number): string {
       const [id1, id2] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
       return `${id1}-${id2}`;
     }
     
-    // Make broadcastToUser available to routes IMMEDIATELY
+    // Make broadcastToUser, sendNotification, and onlineUsers available to routes IMMEDIATELY
     setBroadcastFunction(broadcastToUser);
+    setNotificationFunction(sendNotification);
+    setOnlineUsersAccessor(() => Array.from(onlineUsers.keys()));
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

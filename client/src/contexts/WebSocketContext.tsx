@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback, ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 import notificationSound from "@assets/bottle-opening-wine-cork-pop-352701_1762664855578.mp3";
 
 export type WebSocketMessage = 
@@ -8,7 +9,8 @@ export type WebSocketMessage =
   | { type: 'typing_stop'; userId: number }
   | { type: 'new_message'; message: any }
   | { type: 'message_read'; conversationId: number; readBy: number }
-  | { type: 'message_deleted'; messageId: number };
+  | { type: 'message_deleted'; messageId: number }
+  | { type: 'notification'; title: string; description?: string; variant?: 'default' | 'destructive' };
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -20,6 +22,7 @@ const WebSocketContext = createContext<WebSocketContextType | null>(null);
 
 export function WebSocketProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const ws = useRef<WebSocket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeout = useRef<NodeJS.Timeout>();
@@ -55,6 +58,24 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
     ws.current.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data) as WebSocketMessage;
+        
+        // Handle notification messages globally
+        if (message.type === 'notification') {
+          toast({
+            title: message.title,
+            description: message.description,
+            variant: message.variant || 'default',
+          });
+          
+          // Play notification sound
+          if (!audioRef.current) {
+            audioRef.current = new Audio(notificationSound);
+            audioRef.current.volume = 0.5;
+          }
+          audioRef.current.play().catch((error) => {
+            console.log('[WebSocket] Could not play notification sound:', error);
+          });
+        }
         
         // Play notification sound for new messages from other users
         if (message.type === 'new_message') {
