@@ -259,6 +259,9 @@ app.use((req, res, next) => {
               }
               onlineUsers.get(userId)!.add(ws);
 
+              // Update last seen timestamp
+              await storage.updateUserLastSeen(userId);
+
               // Notify user is online
               broadcastToUser(userId, {
                 type: 'online_status',
@@ -341,13 +344,16 @@ app.use((req, res, next) => {
           }
         });
 
-        ws.on('close', () => {
+        ws.on('close', async () => {
           if (userId) {
             const userSockets = onlineUsers.get(userId);
             if (userSockets) {
               userSockets.delete(ws);
               if (userSockets.size === 0) {
                 onlineUsers.delete(userId);
+                
+                // Update last seen timestamp when user goes offline
+                await storage.updateUserLastSeen(userId);
                 
                 // Broadcast offline status
                 broadcastToUser(userId, {

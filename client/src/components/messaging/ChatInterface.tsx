@@ -7,9 +7,50 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { AvatarWithInitials } from "@/components/ui/avatar-with-initials";
-import { ArrowLeft, Send, Loader2, Check, CheckCheck } from "lucide-react";
-import { format } from "date-fns";
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Send, Loader2, Check, CheckCheck, Trash2 } from "lucide-react";
+import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+
+// Helper function to format date headers
+function formatDateHeader(date: Date): string {
+  if (isToday(date)) return "Danas";
+  if (isYesterday(date)) return "Juče";
+  return format(date, "dd.MM.yyyy");
+}
+
+// Helper function to format last seen status
+function formatLastSeen(lastSeen: string | null): string {
+  if (!lastSeen) return "Nepoznato";
+  
+  const now = new Date();
+  const lastSeenDate = new Date(lastSeen);
+  const diffInMs = now.getTime() - lastSeenDate.getTime();
+  const diffInMinutes = Math.floor(diffInMs / 60000);
+  
+  if (diffInMinutes < 1) return "Online";
+  if (diffInMinutes < 60) return `Aktivan pre ${diffInMinutes} min`;
+  
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `Aktivan pre ${diffInHours} h`;
+  
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays === 1) return "Aktivan juče";
+  if (diffInDays < 7) return `Aktivan pre ${diffInDays} dana`;
+  
+  return "Aktivan davno";
+}
 
 interface Message {
   id: number;
@@ -27,6 +68,7 @@ interface OtherUser {
   username: string;
   email: string;
   avatarUrl: string | null;
+  lastSeen: string | null;
 }
 
 interface ChatInterfaceProps {
@@ -80,6 +122,15 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
       setMessageText("");
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: number) => {
+      return await apiRequest("DELETE", `/api/messages/${messageId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/messages/conversation", selectedUserId] });
     },
   });
 
@@ -181,8 +232,10 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
           />
           <div className="flex-1">
             <h3 className="font-semibold">{otherUser?.username || "Učitavanje..."}</h3>
-            {otherUserTyping && (
+            {otherUserTyping ? (
               <p className="text-xs text-muted-foreground italic">Korisnik kuca...</p>
+            ) : otherUser?.lastSeen && (
+              <p className="text-xs text-muted-foreground">{formatLastSeen(otherUser.lastSeen)}</p>
             )}
           </div>
         </div>
@@ -191,68 +244,116 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
         <div className="space-y-4 pb-4">
           {messages && messages.length > 0 ? (
-            messages.map((message) => {
+            messages.map((message, index) => {
               const isOwn = message.senderId === user?.id;
+              const currentDate = new Date(message.createdAt);
+              const previousMessage = index > 0 ? messages[index - 1] : null;
+              const previousDate = previousMessage ? new Date(previousMessage.createdAt) : null;
+              const showDateHeader = !previousDate || !isSameDay(currentDate, previousDate);
               
               return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex gap-2 items-end",
-                    isOwn ? "justify-end flex-row-reverse" : "justify-start"
+                <div key={message.id}>
+                  {showDateHeader && (
+                    <div className="flex items-center justify-center my-4">
+                      <div className="bg-muted px-3 py-1 rounded-full">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {formatDateHeader(currentDate)}
+                        </span>
+                      </div>
+                    </div>
                   )}
-                >
-                  <AvatarWithInitials
-                    src={isOwn ? user?.avatarUrl : otherUser?.avatarUrl}
-                    alt={isOwn ? user?.username : otherUser?.username}
-                    name={isOwn ? user?.username || "User" : otherUser?.username || "User"}
-                    userId={isOwn ? user?.id : selectedUserId}
-                    className="w-8 h-8 flex-shrink-0"
-                  />
                   <div
                     className={cn(
-                      "max-w-[70%] rounded-lg px-4 py-2 group relative",
-                      isOwn
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-foreground",
-                      message.deleted && "opacity-60"
+                      "flex gap-2 items-end",
+                      isOwn ? "justify-end flex-row-reverse" : "justify-start"
                     )}
                   >
-                    {message.deleted ? (
-                      <p className="text-sm italic text-muted-foreground">Poruka obrisana</p>
-                    ) : (
-                      <>
-                        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-                        {message.imageUrl && (
-                          <img
-                            src={message.imageUrl}
-                            alt="attachment"
-                            className="mt-2 rounded max-w-full h-auto"
-                          />
+                    <AvatarWithInitials
+                      src={isOwn ? user?.avatarUrl : otherUser?.avatarUrl}
+                      alt={isOwn ? user?.username : otherUser?.username}
+                      name={isOwn ? user?.username || "User" : otherUser?.username || "User"}
+                      userId={isOwn ? user?.id : selectedUserId}
+                      className="w-8 h-8 flex-shrink-0"
+                    />
+                    <div className="flex items-start gap-1">
+                      <div
+                        className={cn(
+                          "max-w-[70%] rounded-lg px-4 py-2 group relative",
+                          isOwn
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted text-foreground",
+                          message.deleted && "opacity-60"
                         )}
-                      </>
-                    )}
-                    <div className={cn(
-                      "flex items-center gap-1 mt-1",
-                      isOwn ? "justify-end" : "justify-start"
-                    )}>
-                      <span className={cn(
-                        "text-xs opacity-0 group-hover:opacity-100 transition-opacity",
-                        isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
-                      )}>
-                        {format(new Date(message.createdAt), "HH:mm")}
-                      </span>
-                      {isOwn && (
-                        <span className={cn(
-                          "text-xs flex items-center",
-                          isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                      >
+                        {message.deleted ? (
+                          <p className="text-sm italic text-muted-foreground">Poruka obrisana</p>
+                        ) : (
+                          <>
+                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                            {message.imageUrl && (
+                              <img
+                                src={message.imageUrl}
+                                alt="attachment"
+                                className="mt-2 rounded max-w-full h-auto"
+                              />
+                            )}
+                          </>
+                        )}
+                        <div className={cn(
+                          "flex items-center gap-1 mt-1",
+                          isOwn ? "justify-end" : "justify-start"
                         )}>
-                          {message.isRead ? (
-                            <CheckCheck className="w-3 h-3" />
-                          ) : (
-                            <Check className="w-3 h-3" />
+                          <span className={cn(
+                            "text-xs opacity-0 group-hover:opacity-100 transition-opacity",
+                            isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                          )}>
+                            {format(new Date(message.createdAt), "HH:mm")}
+                          </span>
+                          {isOwn && (
+                            <span className={cn(
+                              "text-xs flex items-center",
+                              isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                            )}>
+                              {message.isRead ? (
+                                <CheckCheck className="w-3 h-3" />
+                              ) : (
+                                <Check className="w-3 h-3" />
+                              )}
+                            </span>
                           )}
-                        </span>
+                        </div>
+                      </div>
+                      {isOwn && !message.deleted && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 text-muted-foreground hover:text-destructive"
+                              data-testid={`button-delete-message-${message.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Obriši poruku</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Da li ste sigurni da želite da obrišete ovu poruku? Poruka će biti označena kao obrisana.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel data-testid="button-cancel-delete">Otkaži</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteMessageMutation.mutate(message.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                data-testid="button-confirm-delete"
+                              >
+                                Obriši
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       )}
                     </div>
                   </div>

@@ -53,6 +53,7 @@ export const users = pgTable("users", {
   adminLoginExpiry: timestamp("admin_login_expiry"),
   usernameLastChanged: timestamp("username_last_changed"),
   avatarUrl: text("avatar_url"),
+  lastSeen: timestamp("last_seen"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

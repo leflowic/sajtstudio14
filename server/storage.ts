@@ -73,6 +73,7 @@ export interface IStorage {
   updateUserProfile(userId: number, data: { username?: string; email?: string }): Promise<void>;
   updateUserPassword(userId: number, hashedPassword: string): Promise<void>;
   updateUserAvatar(userId: number, avatarUrl: string | null): Promise<void>;
+  updateUserLastSeen(userId: number): Promise<void>;
 
   // Projects
   createProject(data: { title: string; description: string; genre: string; mp3Url: string; userId: number; currentMonth: string }): Promise<Project>;
@@ -338,6 +339,10 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserAvatar(userId: number, avatarUrl: string | null): Promise<void> {
     await db.update(users).set({ avatarUrl }).where(eq(users.id, userId));
+  }
+
+  async updateUserLastSeen(userId: number): Promise<void> {
+    await db.update(users).set({ lastSeen: sql`now()` }).where(eq(users.id, userId));
   }
 
   // Projects
