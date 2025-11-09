@@ -37,6 +37,9 @@ The website features a modern, responsive design using Tailwind CSS and shadcn/u
 - **Performance**: Optimized for Core Web Vitals (LCP) through lazy loading, prioritized image fetching, async font loading, server compression, and Vite build optimizations.
   - **Vite Build Configuration**: Uses `splitVendorChunkPlugin()` with `modulePreload: { polyfill: true }` to ensure proper chunk loading order and prevent React initialization errors. Vendor bundle optimized to ~446KB (down from 1.1MB).
   - **Bundle Analysis**: Integrated `rollup-plugin-visualizer` for ongoing performance monitoring.
+  - **CSS Page Transitions**: Replaced Framer Motion AnimatePresence in App.tsx with lightweight `.page-transition` CSS class (fade-in animation) for improved performance and accessibility (prefers-reduced-motion support).
+  - **TipTap Lazy Loading**: RichTextEditor component (TipTap) lazy loaded with React.lazy() and Suspense in admin panel. Reduced admin bundle from 455KB → 99KB (78% reduction). TipTap now loads in separate 356KB chunk only when admin opens Newsletter tab.
+  - **Asset Optimization**: Removed 90MB of unused images from attached_assets folder (Apollo Twin 18MB, AutoTune 11MB, etc). Folder reduced from 107MB → 17MB (84% reduction).
 - **Language**: All UI and content are primarily in Serbian.
 - **Security**: Implements case-insensitive email/username lookups, banned user authorization, robust password hashing (Node.js scrypt), and security measures for messaging.
 - **Messaging UI**: User's own messages appear on the left (gray/muted), other user's messages appear on the right (blue/primary).
