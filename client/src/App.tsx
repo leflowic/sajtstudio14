@@ -11,7 +11,6 @@ import { EditModeProvider } from "@/contexts/EditModeContext";
 import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useScrollToTop } from "@/hooks/use-scroll-to-top";
 import { HelmetProvider } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
@@ -54,26 +53,8 @@ const LazyAdminPage = () => <AdminPage />;
 const LazySettings = () => <Settings />;
 const LazyNotFound = () => <NotFound />;
 
-const pageVariants = {
-  initial: { opacity: 0, scale: 0.98 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.98 },
-};
-
-const pageVariantsReduced = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-};
-
-const pageTransition = {
-  duration: 0.4,
-  ease: [0.22, 1, 0.36, 1],
-};
-
 function Router() {
   const [location] = useLocation();
-  const shouldReduceMotion = useReducedMotion();
   const { user } = useAuth();
   
   useScrollToTop();
@@ -101,17 +82,8 @@ function Router() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         }>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              variants={shouldReduceMotion ? pageVariantsReduced : pageVariants}
-              transition={pageTransition}
-              className="w-full"
-            >
-              <Switch location={location}>
+          <div key={location} className="w-full page-transition">
+            <Switch location={location}>
                 <Route path="/" component={LazyHome} />
                 <Route path="/pravila" component={LazyTerms} />
                 <Route path="/tim" component={LazyTeam} />
@@ -131,9 +103,8 @@ function Router() {
                 <ProtectedRoute path="/admin" component={LazyAdminPage} />
                 <ProtectedRoute path="/settings" component={LazySettings} />
                 <Route component={LazyNotFound} />
-              </Switch>
-            </motion.div>
-          </AnimatePresence>
+            </Switch>
+          </div>
         </Suspense>
       </main>
       <Footer />
