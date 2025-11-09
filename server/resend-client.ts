@@ -133,10 +133,17 @@ export async function sendEmail({
   to,
   subject,
   html,
+  attachments,
 }: {
   to: string;
   subject: string;
   html: string;
+  attachments?: Array<{
+    filename: string;
+    content: string;
+    encoding?: string;
+    contentType?: string;
+  }>;
 }) {
   const isDevelopment = process.env.NODE_ENV === 'development';
   
@@ -153,6 +160,7 @@ export async function sendEmail({
       to,
       subject,
       html,
+      ...(attachments && { attachments }),
     });
 
     if (error) {

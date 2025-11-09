@@ -1876,6 +1876,14 @@ Sitemap: ${siteUrl}/sitemap.xml
 
   // ========== CONTRACTS ==========
 
+  // Helper function to sanitize client name for filename
+  function sanitizeNameForFilename(name: string): string {
+    return name
+      .replace(/\s+/g, '') // Remove all spaces
+      .replace(/[^a-zA-Z0-9]/g, '') // Remove special characters
+      .substring(0, 30); // Limit to 30 characters
+  }
+
   // Generate contract PDF
   app.post("/api/admin/contracts/generate", requireAdmin, async (req, res) => {
     try {
@@ -1932,7 +1940,20 @@ Sitemap: ${siteUrl}/sitemap.xml
       const contractsDir = path.join(process.cwd(), 'attached_assets', 'contracts');
       fs.mkdirSync(contractsDir, { recursive: true });
       
-      const filename = `ugovor_${contractNumber.replace('/', '_')}.pdf`;
+      // Extract client/buyer name based on contract type
+      let clientName = '';
+      if (contractType === 'mix_master') {
+        clientName = validatedData.clientName || '';
+      } else {
+        // copyright_transfer and instrumental_sale use buyerName
+        clientName = validatedData.buyerName || '';
+      }
+      const sanitizedName = sanitizeNameForFilename(clientName);
+      
+      // Build filename with client name suffix (or without if name is empty)
+      const filename = sanitizedName 
+        ? `ugovor_${contractNumber.replace('/', '_')}_${sanitizedName}.pdf`
+        : `ugovor_${contractNumber.replace('/', '_')}.pdf`;
       const pdfPath = path.join(contractsDir, filename);
       fs.writeFileSync(pdfPath, pdfBuffer);
 
@@ -1991,8 +2012,11 @@ Sitemap: ${siteUrl}/sitemap.xml
         return res.status(404).json({ error: "PDF fajl nije pronađen" });
       }
 
+      // Extract filename from pdfPath for consistent download name
+      const downloadFilename = path.basename(contract.pdfPath || `ugovor_${contract.contractNumber.replace('/', '_')}.pdf`);
+
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="ugovor_${contract.contractNumber.replace('/', '_')}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
       
       const fileStream = fs.createReadStream(pdfPath);
       fileStream.pipe(res);
@@ -2137,12 +2161,15 @@ Sitemap: ${siteUrl}/sitemap.xml
       `;
 
       // Send email with PDF attachment
+      // Extract filename from pdfPath for consistent email attachment name
+      const emailFilename = path.basename(contract.pdfPath || `ugovor_${contract.contractNumber.replace('/', '_')}.pdf`);
+
       await sendEmail({
         to: email,
         subject: `Studio LeFlow - Ugovor ${contract.contractNumber}`,
         html: emailHtml,
         attachments: [{
-          filename: `ugovor_${contract.contractNumber.replace('/', '_')}.pdf`,
+          filename: emailFilename,
           content: pdfBase64,
           encoding: 'base64',
           contentType: 'application/pdf',

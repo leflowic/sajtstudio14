@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { Readable } from "stream";
+import path from "path";
 
 export interface MixMasterContract {
   // Osnovno
@@ -133,6 +134,38 @@ export interface InstrumentalSaleContract {
 }
 
 /**
+ * Helper function to draw Studio LeFlow logo at top-right of contract
+ */
+function drawContractLogo(doc: PDFKit.PDFDocument): void {
+  try {
+    const logoPath = path.resolve(process.cwd(), 'attached_assets', 'logo', 'studioleflow-transparent.png');
+    const logoWidth = 120; // 120pt width as recommended by architect
+    
+    // Save current Y position
+    const startY = doc.y;
+    
+    // Calculate X position for right-aligned logo (accounting for right margin of 72pt)
+    const pageWidth = doc.page.width;
+    const rightMargin = 72;
+    const logoX = pageWidth - rightMargin - logoWidth;
+    
+    // Draw logo at top-right, maintaining aspect ratio
+    doc.image(logoPath, logoX, startY, {
+      width: logoWidth,
+      align: 'right'
+    });
+    
+    // Move cursor below the logo with some spacing
+    // Assuming logo height is ~60pt at 120pt width, add spacing
+    doc.moveDown(4);
+    
+  } catch (error) {
+    // Graceful fallback if logo is missing - just skip it
+    console.error('[PDF] Failed to load logo:', error);
+  }
+}
+
+/**
  * Generate PDF buffer for Mix/Master contract
  */
 export function generateMixMasterPDF(data: MixMasterContract): Promise<Buffer> {
@@ -150,6 +183,9 @@ export function generateMixMasterPDF(data: MixMasterContract): Promise<Buffer> {
     doc.on('data', buffers.push.bind(buffers));
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
+
+    // Draw Studio LeFlow logo at top-right
+    drawContractLogo(doc);
 
     // Header
     doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRUŽANJU USLUGA MIXINGA I MASTERINGA', { align: 'center' });
@@ -309,6 +345,9 @@ export function generateCopyrightTransferPDF(data: CopyrightTransferContract): P
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
 
+    // Draw Studio LeFlow logo at top-right
+    drawContractLogo(doc);
+
     // Header
     doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRENOSU IMOVINSKIH AUTORSKIH PRAVA', { align: 'center' });
     doc.moveDown(2);
@@ -463,6 +502,9 @@ export function generateInstrumentalSalePDF(data: InstrumentalSaleContract): Pro
     doc.on('data', buffers.push.bind(buffers));
     doc.on('end', () => resolve(Buffer.concat(buffers)));
     doc.on('error', reject);
+
+    // Draw Studio LeFlow logo at top-right
+    drawContractLogo(doc);
 
     // Header
     doc.fontSize(14).font('DejaVuSans-Bold').text('UGOVOR O PRODAJI INSTRUMENTALA', { align: 'center' });
