@@ -243,22 +243,28 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
       </Card>
 
       <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
-        <div className="space-y-4 pb-4">
+        <div className="flex flex-col gap-1 pb-4">
           {messages && messages.length > 0 ? (
             messages.map((message, index) => {
               const isOwn = message.senderId === user?.id;
-              const isAlignedRight = !isOwn; // User's messages LEFT, other's RIGHT
+              const isAlignedRight = isOwn; // User's messages RIGHT, other's LEFT (WhatsApp style)
               const currentDate = new Date(message.createdAt);
               const previousMessage = index > 0 ? messages[index - 1] : null;
               const previousDate = previousMessage ? new Date(previousMessage.createdAt) : null;
               const showDateHeader = !previousDate || !isSameDay(currentDate, previousDate);
               
+              // Check if this message is from the same sender as previous one (for grouping)
+              const isGrouped = previousMessage && 
+                previousMessage.senderId === message.senderId && 
+                !showDateHeader &&
+                (new Date(message.createdAt).getTime() - new Date(previousMessage.createdAt).getTime()) < 60000; // Within 1 minute
+              
               return (
                 <div key={message.id}>
                   {showDateHeader && (
                     <div className="flex items-center justify-center my-4">
-                      <div className="bg-muted px-3 py-1 rounded-full">
-                        <span className="text-xs font-medium text-muted-foreground">
+                      <div className="bg-secondary/70 px-3 py-1 rounded-full">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                           {formatDateHeader(currentDate)}
                         </span>
                       </div>
@@ -267,23 +273,31 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                   <div
                     className={cn(
                       "flex gap-2 items-end",
-                      isAlignedRight ? "justify-end flex-row-reverse" : "justify-start"
+                      isAlignedRight ? "justify-end" : "justify-start",
+                      isGrouped ? "mt-1" : "mt-4"
                     )}
                   >
-                    <AvatarWithInitials
-                      src={isOwn ? user?.avatarUrl : otherUser?.avatarUrl}
-                      alt={isOwn ? user?.username : otherUser?.username}
-                      name={isOwn ? user?.username || "User" : otherUser?.username || "User"}
-                      userId={isOwn ? user?.id : selectedUserId}
-                      className="w-8 h-8 flex-shrink-0"
-                    />
+                    {!isGrouped && (
+                      <AvatarWithInitials
+                        src={isOwn ? user?.avatarUrl : otherUser?.avatarUrl}
+                        alt={isOwn ? user?.username : otherUser?.username}
+                        name={isOwn ? user?.username || "User" : otherUser?.username || "User"}
+                        userId={isOwn ? user?.id : selectedUserId}
+                        className={cn(
+                          "w-8 h-8 flex-shrink-0",
+                          isAlignedRight && "order-2"
+                        )}
+                      />
+                    )}
+                    {isGrouped && <div className="w-8 flex-shrink-0" />}
                     <div className="flex items-start gap-1">
                       <div
                         className={cn(
-                          "max-w-[70%] rounded-lg px-4 py-2 group relative",
+                          "rounded-lg px-3 py-2 group relative shadow-sm",
+                          "max-w-[min(42rem,90vw)]",
                           isAlignedRight
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-foreground",
+                            ? "bg-primary text-primary-foreground rounded-br-sm"
+                            : "bg-muted text-foreground rounded-bl-sm",
                           message.deleted && "opacity-60"
                         )}
                       >
@@ -291,7 +305,9 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                           <p className="text-sm italic text-muted-foreground">Poruka obrisana</p>
                         ) : (
                           <>
-                            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed [word-break:break-word] [overflow-wrap:anywhere]">
+                              {message.content}
+                            </p>
                             {message.imageUrl && (
                               <img
                                 src={message.imageUrl}
@@ -302,24 +318,24 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                           </>
                         )}
                         <div className={cn(
-                          "flex items-center gap-1 mt-1",
+                          "flex items-center gap-1.5 mt-1",
                           isAlignedRight ? "justify-end" : "justify-start"
                         )}>
                           <span className={cn(
-                            "text-xs opacity-0 group-hover:opacity-100 transition-opacity",
-                            isAlignedRight ? "text-primary-foreground/70" : "text-muted-foreground"
+                            "text-[11px] leading-none",
+                            isAlignedRight ? "text-primary-foreground/60" : "text-muted-foreground/70"
                           )}>
                             {format(new Date(message.createdAt), "HH:mm")}
                           </span>
                           {isOwn && (
                             <span className={cn(
-                              "text-xs flex items-center",
-                              isAlignedRight ? "text-primary-foreground/70" : "text-muted-foreground"
+                              "flex items-center",
+                              isAlignedRight ? "text-primary-foreground/60" : "text-muted-foreground/70"
                             )}>
                               {message.isRead ? (
-                                <CheckCheck className="w-3 h-3" />
+                                <CheckCheck className="w-3.5 h-3.5" />
                               ) : (
-                                <Check className="w-3 h-3" />
+                                <Check className="w-3.5 h-3.5" />
                               )}
                             </span>
                           )}
