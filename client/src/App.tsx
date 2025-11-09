@@ -121,7 +121,7 @@ function Router() {
                 <Route path="/verify-email" component={LazyVerifyEmailPage} />
                 <Route path="/newsletter/potvrda/:token" component={LazyNewsletterConfirmation} />
                 <Route path="/uslovi-koriscenja" component={LazyTermsOfUse} />
-                <Route path="/zajednica" component={LazyZajednica} />
+                <ProtectedRoute path="/zajednica" component={LazyZajednica} />
                 <ProtectedRoute path="/giveaway" component={LazyGiveaway} />
                 <ProtectedRoute path="/moje-pesme" component={LazyMojePesme} />
                 <ProtectedRoute path="/inbox" component={LazyInbox} />
