@@ -12,6 +12,7 @@ import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { useScrollToTop } from "@/hooks/use-scroll-to-top";
+import { usePWARedirect } from "@/hooks/use-pwa-redirect";
 import { HelmetProvider } from "react-helmet-async";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
@@ -59,6 +60,7 @@ function Router() {
   const { user } = useAuth();
   
   useScrollToTop();
+  usePWARedirect(); // Auto-redirect in PWA standalone mode
 
   // Check if maintenance mode is active
   const { data: maintenanceData } = useQuery<{ maintenanceMode: boolean }>({
