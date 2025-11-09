@@ -37,12 +37,6 @@ export function Header() {
 
   const unreadCount = unreadData?.count ?? 0;
 
-  // Fetch site announcement
-  const { data: announcement } = useQuery<{ isActive: boolean; message: string }>({
-    queryKey: ['/api/announcement'],
-    refetchInterval: 60000, // Refetch every minute
-  });
-
   // Subscribe to WebSocket events to update unread count in real-time
   useEffect(() => {
     if (!user || !user.emailVerified) return;
@@ -92,18 +86,6 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b">
-      {announcement?.isActive && announcement.message && (
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="absolute left-1/2 -translate-x-1/2 top-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-destructive/10 border border-destructive/30 announcement-badge-shimmer z-10"
-          data-testid="badge-header-announcement"
-        >
-          <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
-          <span className="text-xs font-medium text-destructive whitespace-nowrap max-w-[300px] truncate">{announcement.message}</span>
-        </motion.div>
-      )}
       <div className="max-w-7xl mx-auto px-4 md:px-6">
         <div className="flex items-center justify-between h-16">
           <Link 

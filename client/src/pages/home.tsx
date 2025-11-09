@@ -172,6 +172,19 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/70 to-black/80" />
         
         <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-20 text-center">
+          {announcement?.isActive && announcement.message && (
+            <motion.div 
+              className="mb-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive/20 backdrop-blur-md border border-destructive/40 announcement-badge-shimmer"
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.05 }}
+              data-testid="badge-site-announcement"
+            >
+              <AlertCircle className="w-4 h-4 text-destructive" />
+              <span className="text-sm font-medium text-white">{announcement.message}</span>
+            </motion.div>
+          )}
+
           <motion.div 
             className="mb-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/20 backdrop-blur-md border border-primary/30"
             initial={{ opacity: 0, y: -20 }}
