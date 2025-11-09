@@ -231,7 +231,7 @@ export function ContractsTab() {
                             {format(new Date(contract.createdAt), "dd.MM.yyyy")}
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="flex items-center justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
                               <AssignUserDialog
                                 contractId={contract.id}
                                 contractNumber={contract.contractNumber}
