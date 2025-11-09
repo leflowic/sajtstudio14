@@ -246,6 +246,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
           {messages && messages.length > 0 ? (
             messages.map((message, index) => {
               const isOwn = message.senderId === user?.id;
+              const isAlignedRight = !isOwn; // User's messages LEFT, other's RIGHT
               const currentDate = new Date(message.createdAt);
               const previousMessage = index > 0 ? messages[index - 1] : null;
               const previousDate = previousMessage ? new Date(previousMessage.createdAt) : null;
@@ -265,7 +266,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                   <div
                     className={cn(
                       "flex gap-2 items-end",
-                      isOwn ? "justify-end flex-row-reverse" : "justify-start"
+                      isAlignedRight ? "justify-end flex-row-reverse" : "justify-start"
                     )}
                   >
                     <AvatarWithInitials
@@ -279,7 +280,7 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                       <div
                         className={cn(
                           "max-w-[70%] rounded-lg px-4 py-2 group relative",
-                          isOwn
+                          isAlignedRight
                             ? "bg-primary text-primary-foreground"
                             : "bg-muted text-foreground",
                           message.deleted && "opacity-60"
@@ -301,18 +302,18 @@ export default function ChatInterface({ selectedUserId, onBack }: ChatInterfaceP
                         )}
                         <div className={cn(
                           "flex items-center gap-1 mt-1",
-                          isOwn ? "justify-end" : "justify-start"
+                          isAlignedRight ? "justify-end" : "justify-start"
                         )}>
                           <span className={cn(
                             "text-xs opacity-0 group-hover:opacity-100 transition-opacity",
-                            isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                            isAlignedRight ? "text-primary-foreground/70" : "text-muted-foreground"
                           )}>
                             {format(new Date(message.createdAt), "HH:mm")}
                           </span>
                           {isOwn && (
                             <span className={cn(
                               "text-xs flex items-center",
-                              isOwn ? "text-primary-foreground/70" : "text-muted-foreground"
+                              isAlignedRight ? "text-primary-foreground/70" : "text-muted-foreground"
                             )}>
                               {message.isRead ? (
                                 <CheckCheck className="w-3 h-3" />

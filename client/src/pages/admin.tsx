@@ -25,7 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye } from "lucide-react";
+import { Users, Music, Heart, MessageCircle, Trash2, Shield, ShieldOff, Settings, Construction, Send, Mail, Eye, Search } from "lucide-react";
 import { format } from "date-fns";
 import type { User, CmsContent, InsertCmsContent } from "@shared/schema";
 import { RichTextEditor } from "@/components/RichTextEditor";
@@ -101,6 +101,13 @@ interface AuditLogEntry {
   user1Username: string;
   user2Username: string;
   viewedAt: string;
+}
+
+interface MessagingStats {
+  totalMessages: number;
+  totalConversations: number;
+  deletedMessages: number;
+  activeConversations: number;
 }
 
 export default function AdminPage() {
@@ -620,6 +627,7 @@ function NewsletterTab() {
 function MessagesTab() {
   const { toast } = useToast();
   const [selectedConversation, setSelectedConversation] = useState<ConversationWithUsers | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery<ConversationWithUsers[]>({
     queryKey: ["/api/admin/messages/conversations"],
@@ -646,6 +654,15 @@ function MessagesTab() {
     queryFn: async () => {
       const response = await fetch("/api/admin/messages/audit-logs");
       if (!response.ok) throw new Error("Failed to load audit logs");
+      return await response.json();
+    },
+  });
+
+  const { data: stats, isLoading: statsLoading } = useQuery<MessagingStats>({
+    queryKey: ["/api/admin/messages/stats"],
+    queryFn: async () => {
+      const response = await fetch("/api/admin/messages/stats");
+      if (!response.ok) throw new Error("Failed to load messaging stats");
       return await response.json();
     },
   });
@@ -679,8 +696,75 @@ function MessagesTab() {
     return format(new Date(dateString), "dd.MM.yyyy HH:mm");
   };
 
+  const filteredConversations = conversations.filter((conv) => {
+    const query = searchQuery.toLowerCase();
+    return (
+      conv.user1Username.toLowerCase().includes(query) ||
+      conv.user2Username.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="space-y-6">
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ukupno Poruka</CardTitle>
+            <MessageCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.totalMessages || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Ukupno Konverzacija</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.totalConversations || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Aktivne (30 dana)</CardTitle>
+            <Heart className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats?.activeConversations || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Obrisane Poruke</CardTitle>
+            <Trash2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold text-destructive">{stats?.deletedMessages || 0}</div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -693,6 +777,19 @@ function MessagesTab() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Pretraži po korisničkim imenima..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search-conversations"
+                />
+              </div>
+            </div>
             {conversationsLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-16 w-full" />
@@ -703,10 +800,14 @@ function MessagesTab() {
               <p className="text-center text-muted-foreground py-8">
                 Nema konverzacija
               </p>
+            ) : filteredConversations.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">
+                Nema rezultata pretrage
+              </p>
             ) : (
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-2">
-                  {conversations.map((conversation) => (
+                  {filteredConversations.map((conversation) => (
                     <Card
                       key={conversation.id}
                       className={`cursor-pointer transition-colors hover:bg-accent ${
@@ -721,15 +822,15 @@ function MessagesTab() {
                             <div className="flex items-center -space-x-2">
                               <AvatarWithInitials
                                 userId={conversation.user1Id}
-                                username={conversation.user1Username}
-                                avatarUrl={conversation.user1AvatarUrl}
-                                size="sm"
+                                name={conversation.user1Username}
+                                src={conversation.user1AvatarUrl}
+                                className="w-8 h-8"
                               />
                               <AvatarWithInitials
                                 userId={conversation.user2Id}
-                                username={conversation.user2Username}
-                                avatarUrl={conversation.user2AvatarUrl}
-                                size="sm"
+                                name={conversation.user2Username}
+                                src={conversation.user2AvatarUrl}
+                                className="w-8 h-8"
                               />
                             </div>
                             <span className="font-medium">

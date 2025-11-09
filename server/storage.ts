@@ -149,6 +149,7 @@ export interface IStorage {
   adminDeleteMessage(messageId: number): Promise<boolean>;
   adminLogConversationView(adminId: number, viewedUser1Id: number, viewedUser2Id: number): Promise<void>;
   adminGetAuditLogs(): Promise<Array<AdminMessageAudit & { adminUsername: string; user1Username: string; user2Username: string }>>;
+  adminGetMessagingStats(): Promise<{ totalMessages: number; totalConversations: number; deletedMessages: number; activeConversations: number }>;
 
   // Session store
   sessionStore: Store;
@@ -1174,6 +1175,36 @@ export class DatabaseStorage implements IStorage {
     );
 
     return results;
+  }
+
+  async adminGetMessagingStats(): Promise<{ totalMessages: number; totalConversations: number; deletedMessages: number; activeConversations: number }> {
+    const [totalMessagesResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messages);
+
+    const [totalConversationsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(conversations);
+
+    const [deletedMessagesResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(messages)
+      .where(eq(messages.deleted, true));
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [activeConversationsResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(conversations)
+      .where(sql`${conversations.lastMessageAt} >= ${thirtyDaysAgo}`);
+
+    return {
+      totalMessages: Number(totalMessagesResult?.count ?? 0),
+      totalConversations: Number(totalConversationsResult?.count ?? 0),
+      deletedMessages: Number(deletedMessagesResult?.count ?? 0),
+      activeConversations: Number(activeConversationsResult?.count ?? 0),
+    };
   }
 }
 

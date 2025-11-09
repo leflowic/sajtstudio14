@@ -1837,6 +1837,17 @@ Sitemap: ${siteUrl}/sitemap.xml
     }
   });
 
+  // Get messaging statistics
+  app.get("/api/admin/messages/stats", requireAdmin, async (req, res) => {
+    try {
+      const stats = await storage.adminGetMessagingStats();
+      res.json(stats);
+    } catch (error: any) {
+      console.error("[ADMIN MESSAGING] Get stats error:", error);
+      res.status(500).json({ error: "Greška pri učitavanju statistike" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
